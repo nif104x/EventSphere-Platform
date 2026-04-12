@@ -1,0 +1,27 @@
+project/
+│── main.py
+│── routers/
+│   ├── users.py
+│   ├── items.py
+│── models/
+│   ├── user.py
+│── schemas/
+│   ├── user.py
+│── database.py
+│── services/
+│   ├── auth_service.py
+
+
+
+
+########## Database ##############
+psql -U postgres
+C:\Program Files\PostgreSQL\18\bin
+\l -> databases
+CREATE DATABASE mydb;
+\c mydb -> connect
+\dt -> tables
+\q -> exit
+
+pg_dump -U postgres mydb > mydb.sql
+psql -U postgres mydb < mydb.sql
