@@ -24,4 +24,7 @@ CREATE DATABASE mydb;
 \q -> exit
 
 pg_dump -U postgres mydb > mydb.sql
+pg_dump --clean --if-exists -U postgres mydb > mydb.sql --> any further changes
+
+
 psql -U postgres mydb < mydb.sql
