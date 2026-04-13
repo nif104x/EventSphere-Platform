@@ -1,27 +1,25 @@
 from fastapi import FastAPI
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import time
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.admin.routes.router import router as admin_router
+from app.search.routes.router import router as search_router
 
-# Connecting Database
-while True:
-    try:
-        conn = psycopg2.connect(host='localhost', database='eventsphere', user='postgres', password='1234', cursor_factory=RealDictCursor)
-        cursor = conn.cursor()
-        print('Successfully connected database')
-        break
-    except Exception as error:
-        print('Database connection Failed!!!!!!!')
-        print("Error:", error)
-        time.sleep(2)
+app = FastAPI(title="EventSphere API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app = FastAPI()
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
+app.include_router(search_router, tags=["search"])
 
 
 @app.get("/")
-def homePage():
-    return {"Hello": "World"}
+def home_page():
+    return {"message": "EventSphere API running"}
 
 

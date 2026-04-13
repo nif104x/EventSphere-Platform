@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EventSphere Search (Plain)</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="container header-inner">
+        <div class="brand">EventSphere</div>
+        <nav>
+          <a href="./search.html">Search</a>
+          <a href="./admin.html">Admin</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container" style="padding-top: 20px">
+      <div class="card">
+        <div style="font-size: 20px; font-weight: 700">Search Results</div>
+        <div class="muted">Search listings by title, organizer name, or category.</div>
+
+        <div class="grid-2" style="margin-top: 12px">
+          <input id="q" placeholder="Search..." />
+          <input id="cat" placeholder="Category (exact)" />
+          <input id="min" placeholder="Min price" />
+          <input id="max" placeholder="Max price" />
+        </div>
+
+        <div class="row" style="margin-top: 12px">
+          <button id="searchBtn" class="btn btn-primary">Search</button>
+          <div class="muted">API: <span class="mono" id="apiText"></span></div>
+        </div>
+
+        <div id="errorBox" class="error" style="display:none; margin-top: 12px"></div>
+      </div>
+
+      <div id="results" class="grid-2" style="margin-top: 16px"></div>
+    </main>
+
+    <script src="./common.js"></script>
+    <script src="./search.js"></script>
+  </body>
+</html>
+

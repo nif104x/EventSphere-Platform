@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EventSphere Admin (Plain)</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="container header-inner">
+        <div class="brand">EventSphere</div>
+        <nav>
+          <a href="./search.html">Search</a>
+          <a href="./admin.html">Admin</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container" style="padding-top: 20px">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div style="font-size: 20px; font-weight: 700">Admin Dashboard</div>
+            <div class="muted">Listings, orders, and user management.</div>
+          </div>
+          <div class="spacer"></div>
+          <button id="refreshBtn" class="btn">Refresh</button>
+        </div>
+
+        <div id="errorBox" class="error" style="display: none; margin-top: 12px"></div>
+
+        <div class="row tabs" style="margin-top: 12px">
+          <button class="btn btn-primary" id="tabListings">Listings</button>
+          <button class="btn" id="tabOrders">Orders</button>
+          <button class="btn" id="tabUsers">Users</button>
+        </div>
+      </div>
+
+      <div id="panelListings" class="card" style="margin-top: 16px; padding: 0">
+        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700">
+          All Event Listings
+        </div>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Organizer</th>
+                <th>Category</th>
+                <th>Title</th>
+                <th>Base Price</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="listingsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="panelOrders" class="card" style="margin-top: 16px; padding: 0; display: none">
+        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700">
+          Orders
+        </div>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Organizer</th>
+                <th>Event Date</th>
+                <th>Event Status</th>
+                <th>Payment</th>
+                <th>Base</th>
+                <th>Addons</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="ordersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="panelUsers" class="card" style="margin-top: 16px; padding: 0; display: none">
+        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700">
+          Users (Ban/Unban)
+        </div>
+        <div style="overflow-x: auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <script src="./common.js"></script>
+    <script src="./admin.js"></script>
+  </body>
+</html>
+
