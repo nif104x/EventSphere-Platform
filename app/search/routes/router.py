@@ -18,4 +18,3 @@ def search(
         min_price=min_price,
         max_price=max_price,
     )
-
