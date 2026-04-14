@@ -2,12 +2,6 @@ from app.db import get_conn
 
 
 def _ensure_service_listings_soft_delete_column():
-    """
-    db.sql doesn't have a safe "delete listing but keep orders" option,
-    because event_orders has a FK to service_listings.
-
-    So we add a very beginner-friendly soft-delete flag.
-    """
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -102,7 +96,9 @@ def get_orders_for_admin():
                 (o["order_id"],),
             )
             addons = cur.fetchall()
-            addons_total = float(sum([a["unit_price"] for a in addons])) if addons else 0.0
+            addons_total = (
+                float(sum([a["unit_price"] for a in addons])) if addons else 0.0
+            )
             base = float(o["base_price_at_booking"])
             o["addons"] = addons
             o["addons_total"] = addons_total
@@ -137,9 +133,6 @@ def get_users_for_admin():
 
 
 def ban_or_unban_user(user_id: str, status: str, reason: str | None) -> bool:
-    """
-    status should be one of: Active, Suspended, Banned
-    """
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -162,4 +155,3 @@ def ban_or_unban_user(user_id: str, status: str, reason: str | None) -> bool:
         return True
     finally:
         conn.close()
-
