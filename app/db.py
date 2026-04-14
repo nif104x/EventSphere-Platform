@@ -18,10 +18,6 @@ DB_PORT = int(_env("DB_PORT", "5432"))
 
 
 def get_conn(retries: int = 20, wait_seconds: int = 2):
-    """
-    Very simple psycopg2 connection helper.
-    Creates a new connection each call (easy + safe for beginners).
-    """
     last_error = None
     for _ in range(retries):
         try:

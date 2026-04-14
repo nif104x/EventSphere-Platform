@@ -3,41 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EventSphere Search (Plain)</title>
+    <title>Search</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header>
-      <div class="container header-inner">
+      <div class="wrap top">
         <div class="brand">EventSphere</div>
         <nav>
+          <a href="./admin.html">Admin</a> |
           <a href="./search.html">Search</a>
-          <a href="./admin.html">Admin</a>
         </nav>
       </div>
     </header>
 
-    <main class="container" style="padding-top: 20px">
+    <main class="wrap">
       <div class="card">
-        <div style="font-size: 20px; font-weight: 700">Search Results</div>
-        <div class="muted">Search listings by title, organizer name, or category.</div>
-
-        <div class="grid-2" style="margin-top: 12px">
-          <input id="q" placeholder="Search..." />
-          <input id="cat" placeholder="Category (exact)" />
-          <input id="min" placeholder="Min price" />
-          <input id="max" placeholder="Max price" />
+        <div class="row">
+          <b>Search</b>
+          <span class="muted">title / org / category</span>
         </div>
-
-        <div class="row" style="margin-top: 12px">
-          <button id="searchBtn" class="btn btn-primary">Search</button>
-          <div class="muted">API: <span class="mono" id="apiText"></span></div>
+        <div class="row" style="margin-top:8px">
+          <input id="q" placeholder="query" />
+          <input id="cat" placeholder="category" />
+          <input id="min" placeholder="min" />
+          <input id="max" placeholder="max" />
+          <button id="go" class="btn p">Go</button>
         </div>
-
-        <div id="errorBox" class="error" style="display:none; margin-top: 12px"></div>
+        <div id="err" class="err"></div>
       </div>
 
-      <div id="results" class="grid-2" style="margin-top: 16px"></div>
+      <div class="card">
+        <div class="muted">Results</div>
+        <div id="out"></div>
+      </div>
     </main>
 
     <script src="./common.js"></script>

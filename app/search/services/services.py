@@ -55,7 +55,6 @@ def search_listings(
         )
         listings = cur.fetchall()
 
-        # Attach addons for display
         for l in listings:
             cur.execute(
                 """

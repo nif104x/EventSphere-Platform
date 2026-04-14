@@ -3,29 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EventSphere (Plain)</title>
+    <title>EventSphere</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header>
-      <div class="container header-inner">
+      <div class="wrap top">
         <div class="brand">EventSphere</div>
         <nav>
+          <a href="./admin.html">Admin</a> |
           <a href="./search.html">Search</a>
-          <a href="./admin.html">Admin</a>
         </nav>
       </div>
     </header>
 
-    <main class="container" style="padding-top: 20px">
+    <main class="wrap">
       <div class="card">
-        <h2 style="margin: 0 0 8px 0">Plain HTML/CSS/JS demo</h2>
-        <div class="muted">
-          This version uses no React and no Tailwind. It calls the same FastAPI endpoints.
-        </div>
-        <div class="row" style="margin-top: 14px">
-          <a class="btn btn-primary" href="./admin.html">Open Admin Dashboard</a>
-          <a class="btn" href="./search.html">Open Search Page</a>
+        <div class="row">
+          <a class="btn p" href="./admin.html">Admin</a>
+          <a class="btn" href="./search.html">Search</a>
         </div>
       </div>
     </main>

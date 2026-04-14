@@ -3,104 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EventSphere Admin (Plain)</title>
+    <title>Admin</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header>
-      <div class="container header-inner">
+      <div class="wrap top">
         <div class="brand">EventSphere</div>
         <nav>
+          <a href="./admin.html">Admin</a> |
           <a href="./search.html">Search</a>
-          <a href="./admin.html">Admin</a>
         </nav>
       </div>
     </header>
 
-    <main class="container" style="padding-top: 20px">
+    <main class="wrap">
       <div class="card">
         <div class="row">
-          <div>
-            <div style="font-size: 20px; font-weight: 700">Admin Dashboard</div>
-            <div class="muted">Listings, orders, and user management.</div>
-          </div>
-          <div class="spacer"></div>
-          <button id="refreshBtn" class="btn">Refresh</button>
+          <b>Admin</b>
+          <span class="muted">Listings / Orders / Users</span>
+          <div class="sp"></div>
+          <button id="refresh" class="btn">Refresh</button>
         </div>
-
-        <div id="errorBox" class="error" style="display: none; margin-top: 12px"></div>
-
-        <div class="row tabs" style="margin-top: 12px">
-          <button class="btn btn-primary" id="tabListings">Listings</button>
-          <button class="btn" id="tabOrders">Orders</button>
-          <button class="btn" id="tabUsers">Users</button>
+        <div id="err" class="err"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="tList" class="btn p">Listings</button>
+          <button id="tOrd" class="btn">Orders</button>
+          <button id="tUsr" class="btn">Users</button>
         </div>
       </div>
 
-      <div id="panelListings" class="card" style="margin-top: 16px; padding: 0">
-        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700">
-          All Event Listings
-        </div>
-        <div style="overflow-x: auto">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Organizer</th>
-                <th>Category</th>
-                <th>Title</th>
-                <th>Base Price</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="listingsBody"></tbody>
-          </table>
-        </div>
+      <div id="pList" class="card">
+        <table>
+          <thead><tr><th>ID</th><th>Org</th><th>Title</th><th>Price</th><th></th></tr></thead>
+          <tbody id="bList"></tbody>
+        </table>
       </div>
 
-      <div id="panelOrders" class="card" style="margin-top: 16px; padding: 0; display: none">
-        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700">
-          Orders
-        </div>
-        <div style="overflow-x: auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Organizer</th>
-                <th>Event Date</th>
-                <th>Event Status</th>
-                <th>Payment</th>
-                <th>Base</th>
-                <th>Addons</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody id="ordersBody"></tbody>
-          </table>
-        </div>
+      <div id="pOrd" class="card" style="display:none">
+        <table>
+          <thead><tr><th>Order</th><th>Customer</th><th>Org</th><th>Date</th><th>Status</th><th>Pay</th><th>Total</th></tr></thead>
+          <tbody id="bOrd"></tbody>
+        </table>
       </div>
 
-      <div id="panelUsers" class="card" style="margin-top: 16px; padding: 0; display: none">
-        <div style="padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700">
-          Users (Ban/Unban)
-        </div>
-        <div style="overflow-x: auto">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="usersBody"></tbody>
-          </table>
-        </div>
+      <div id="pUsr" class="card" style="display:none">
+        <table>
+          <thead><tr><th>ID</th><th>User</th><th>Role</th><th>Status</th><th></th></tr></thead>
+          <tbody id="bUsr"></tbody>
+        </table>
       </div>
     </main>
 

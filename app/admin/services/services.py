@@ -83,7 +83,6 @@ def get_orders_for_admin():
         )
         orders = cur.fetchall()
 
-        # attach addons + calculate totals
         for o in orders:
             cur.execute(
                 """
