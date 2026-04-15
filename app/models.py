@@ -81,7 +81,6 @@ class VendorReviews(Base):
     id = Column(String(50), primary_key=True, index=True)
     event_id = Column(String(50), ForeignKey("events.id", ondelete="CASCADE"))
     vendor_id = Column(String(50), ForeignKey("organizer_info.org_id"))
-    customer_id = Column(String(50), ForeignKey("customer_info.customer_id"), nullable=True)
     rating = Column(Integer)
     comment = Column(String)
 

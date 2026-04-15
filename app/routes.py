@@ -197,44 +197,30 @@ def submit_rating(
             status_code=400, detail="You can only rate after the event is completed"
         )
     exists = db.execute(
-        text(
-            """
-        SELECT 1 FROM vendor_reviews WHERE event_id = :event_id AND customer_id = :cid
-    """
-        ),
-        {"event_id": event_id, "cid": body.customer_id},
+        text("SELECT 1 FROM vendor_reviews WHERE event_id = :event_id LIMIT 1"),
+        {"event_id": event_id},
     ).first()
     if exists:
         raise HTTPException(status_code=400, detail="Already rated this event")
 
     rev_id = _next_seq(db, "vendor_reviews", "id", "REV")
-    try:
-        db.execute(
-            text(
-                """
-            INSERT INTO vendor_reviews (id, event_id, vendor_id, customer_id, rating, comment)
-            VALUES (:id, :event_id, :vendor_id, :customer_id, :rating, :comment)
-        """
-            ),
-            {
-                "id": rev_id,
-                "event_id": event_id,
-                "vendor_id": m["org_id"],
-                "customer_id": body.customer_id,
-                "rating": body.rating,
-                "comment": body.comment,
-            },
-        )
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        err = str(e.orig) if hasattr(e, "orig") else str(e)
-        if "customer_id" in err or "column" in err.lower():
-            raise HTTPException(
-                status_code=500,
-                detail="Database missing customer_id on vendor_reviews; run Database/migrations/001_vendor_reviews_customer_id.sql",
-            )
-        raise HTTPException(status_code=500, detail="Could not save rating")
+    comment = body.comment if body.comment else None
+    db.execute(
+        text(
+            """
+        INSERT INTO vendor_reviews (id, event_id, vendor_id, rating, comment)
+        VALUES (:id, :event_id, :vendor_id, :rating, :comment)
+    """
+        ),
+        {
+            "id": rev_id,
+            "event_id": event_id,
+            "vendor_id": m["org_id"],
+            "rating": body.rating,
+            "comment": comment,
+        },
+    )
+    db.commit()
 
     return {"review_id": rev_id}
 
@@ -246,14 +232,15 @@ def get_dashboard(customer_id: str, db: Session = Depends(get_db)):
             """
         SELECT e.id AS id, e.event_date AS event_date, e.status AS status,
                o.company_name AS company_name, e.org_id AS org_id,
-               vr.rating AS my_rating,
+               (SELECT vr.rating FROM vendor_reviews vr WHERE vr.event_id = e.id LIMIT 1) AS my_rating,
                CASE
-                 WHEN e.status::text = 'Completed' AND vr.id IS NULL THEN true
+                 WHEN e.status::text = 'Completed'
+                      AND NOT EXISTS (SELECT 1 FROM vendor_reviews r2 WHERE r2.event_id = e.id)
+                 THEN true
                  ELSE false
                END AS can_rate
         FROM events e
         JOIN organizer_info o ON e.org_id = o.org_id
-        LEFT JOIN vendor_reviews vr ON vr.event_id = e.id AND vr.customer_id = :customer_id
         WHERE e.customer_id = :customer_id
         ORDER BY e.event_date DESC
     """
