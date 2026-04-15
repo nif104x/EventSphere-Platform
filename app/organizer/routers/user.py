@@ -1,14 +1,17 @@
 from fastapi import FastAPI, HTTPException, status, Response, Depends, APIRouter
-from sqlalchemy.orm import Session 
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 
 from app.organizer.database import get_db
-from app.organizer import models, schemas, utils, ouath2
+from app.organizer import models, schemas, utils, ouath2, database
+from app.organizer.routers import auth
 
 import uuid
 
 # For jinja2 templates
-from fastapi import Request
+from fastapi import Request, Form
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse, HTMLResponse
 
 
 templates = Jinja2Templates(directory="app/organizer/templates")
@@ -27,12 +30,114 @@ router = APIRouter(
 #     return users
 
 @router.get("/dashboard", name="dashboard", include_in_schema=False)
-def dashboard(request: Request):
-    return templates.TemplateResponse(request, "organizer/dashboard.html", {'data':1})
+def dashboard_page(request: Request, current_user: models.OrganizerInfo = Depends(ouath2.get_current_user), db: Session=Depends(get_db)):
+    analytics = db.query(models.VendorAnalytics).filter(models.VendorAnalytics.org_id==current_user.org_id).first()
+    
+    orders_pending = db.query(models.Event).filter(
+        models.Event.org_id == current_user.org_id,
+        models.Event.status == "Pending"
+    ).all()
+
+    gigs = db.query(models.ServiceListing).options(
+        joinedload(models.ServiceListing.images)
+    ).filter(
+        models.ServiceListing.org_id == current_user.org_id
+    ).all()
+
+    average_rating = db.query(func.avg(models.VendorReview.rating)).filter(
+        models.VendorReview.vendor_id == current_user.org_id
+        ).scalar()
+    
+    display_rating = round(average_rating, 1) if average_rating else "0.0"
+
+    completed = db.query(models.Event).options(
+        joinedload(models.Event.order) 
+    ).filter(
+        models.Event.org_id == current_user.org_id,
+        models.Event.status == "Completed" 
+    ).all()
+
+    return templates.TemplateResponse(
+        request=request, 
+        name="organizer/dashboard.html", 
+        context={
+            "request": request, 
+            "user": current_user, 
+            "gigs": gigs,             
+            "analytics": analytics, 
+            "pending": orders_pending,
+            "rating": display_rating,
+            "completed": completed
+        }
+    )
+
+
+
+
+
+
 
 @router.get("/creategig", name="creategig", include_in_schema=False)
 def creategig(request: Request):
     return templates.TemplateResponse(request, "organizer/creategig.html", {'data':1})
+
+
+@router.post("/creategig", name="handle_create_gig", include_in_schema=False)
+def handle_create_gig(
+    request: Request,
+    form:schemas.GigCreateRequest = Depends(),
+    db:Session=Depends(get_db),
+    current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)
+):
+    listing_id = f"LIST-{uuid.uuid4().hex[:6].upper()}"
+    new_gig = models.ServiceListing(
+        id=listing_id,
+        org_id=current_user.org_id,
+        title = form.title,
+        category=form.category,
+        base_price = form.base_price
+    )
+    db.add(new_gig)
+    image_id = f"IMG-{uuid.uuid4().hex[:6].upper()}"
+    new_image = models.ListingImage(
+        id=image_id,
+        listing_id=listing_id,
+        image_url=form.image_url
+    )
+    db.add(new_image)
+
+    for name, price in zip(form.addon_names, form.addon_prices):
+        if name.strip():  
+            addon_id = f"ADD-{str(uuid.uuid4())[:8]}"
+            new_addon = models.ServiceAddon(
+                id=addon_id,
+                listing_id=listing_id,
+                addon_name=name,
+                price=price
+            )
+            db.add(new_addon)
+
+    db.commit()
+
+    return RedirectResponse(
+        url=request.url_for("dashboard"), 
+        status_code=303
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @router.get("/message", name="message", include_in_schema=False)
 def message(request: Request):
@@ -66,6 +171,28 @@ def user_registration(data:schemas.OrganizerRegisterSchema, db : Session=Depends
     db.add(organizer)
     db.commit()
     return{"message": "Organizer created successfully"}
+
+
+
+
+# LOG IN HANDLING:
+@router.get("/login", name="login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(request,"organizer/login.html", {"request": request})
+
+@router.post("/login", name="login_post")
+def login(request:Request, username:str=Form(...), password: str = Form(...), db: Session=Depends(database.get_db)):
+    user_credentials = schemas.userLoginSchema(username=username, password=password)
+    auth_data = auth.login(user_credentials=user_credentials, db=db)
+
+    token = auth_data["access_token"]
+
+    redirect = RedirectResponse(url= request.url_for("dashboard"), status_code=status.HTTP_303_SEE_OTHER)
+    redirect.set_cookie(key="access_token", value=f"Bearer {token}", httponly=True, path="/")
+
+    return redirect
+    
+
 
 
 

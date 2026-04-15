@@ -24,17 +24,17 @@
             <h1>Publish a New Service</h1>
         </header>
 
-        <form class="gig-form" id="gigForm">
+        <form class="gig-form" id="gigForm" method="POST" action="{{ url_for('handle_create_gig') }}">
             <div class="form-section">
                 <h3>1. Core Details</h3>
                 <div class="input-group">
                     <label>Listing Title</label>
-                    <input type="text" placeholder="e.g., Professional DJ Services" required>
+                    <input type="text" name="title" placeholder="e.g., Professional DJ Services" required>
                 </div>
                 <div class="row">
                     <div class="input-group">
                         <label>Category</label>
-                        <select required>
+                        <select name="category" required>
                             <option value="Entertainment">Entertainment</option>
                             <option value="Catering">Catering</option>
                             <option value="Decor">Decor</option>
@@ -43,7 +43,7 @@
                     </div>
                     <div class="input-group">
                         <label>Base Price ($)</label>
-                        <input type="number" step="0.01" placeholder="500.00" required>
+                        <input type="number" name="base_price" step="0.01" placeholder="500.00" required>
                     </div>
                 </div>
             </div>
@@ -52,7 +52,7 @@
                 <h3>2. Listing Image</h3>
                 <div class="input-group">
                     <label>Image URL</label>
-                    <input type="url" placeholder="https://example.com/image.jpg" required>
+                    <input type="url" name="image_url" placeholder="https://example.com/image.jpg" required>
                 </div>
             </div>
 
@@ -64,10 +64,10 @@
                 <div id="addonContainer">
                     <div class="row addon-row">
                         <div class="input-group">
-                            <input type="text" placeholder="Addon Name (e.g., Smoke Machine)">
+                            <input type="text" name="addon_names" placeholder="Addon Name (e.g., Smoke Machine)">
                         </div>
                         <div class="input-group">
-                            <input type="number" step="0.01" placeholder="Price ($)">
+                            <input type="number" name="addon_prices" step="0.01" placeholder="Price ($)">
                         </div>
                     </div>
                 </div>
@@ -85,21 +85,15 @@
             row.className = 'row addon-row';
             row.innerHTML = `
                 <div class="input-group">
-                    <input type="text" placeholder="Addon Name">
+                    <input type="text" name="addon_names" placeholder="Addon Name">
                 </div>
                 <div class="input-group">
-                    <input type="number" step="0.01" placeholder="Price ($)">
+                    <input type="number" name="addon_prices" step="0.01" placeholder="Price ($)">
                 </div>
             `;
             container.appendChild(row);
         }
 
-        // Prevent real submission for mockup
-        document.getElementById('gigForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            alert("Gig Data prepared for FastAPI POST request!");
-            window.location.href = "dashboard.html";
-        });
     </script>
 </body>
 </html>

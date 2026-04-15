@@ -11,7 +11,8 @@ router = APIRouter(
 
 
 # @router.post("/organizerLogin", response_model=schemas.OrganizerInfoSchema)
-@router.post("/organizerLogin", response_model=schemas.Token)
+# @router.post("/organizerLogin", response_model=schemas.Token)
+
 def login(user_credentials: schemas.userLoginSchema, db: Session=Depends(database.get_db)):
     user = db.query(models.UserMain).filter(models.UserMain.username==user_credentials.username).first()
     if not user:
@@ -27,5 +28,6 @@ def login(user_credentials: schemas.userLoginSchema, db: Session=Depends(databas
         expires_delta=timedelta(minutes=ouath2.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
-
     return {"access_token": access_token, "token_type": "bearer"}
+
+

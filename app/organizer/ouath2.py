@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 from sqlalchemy.orm import Session
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/organizerLogin")
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/organizerLogin")
 
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
@@ -40,13 +40,41 @@ def verify_access_token(token:str, credential_exception):
     
     return token_data
 
-def get_current_user(token:str = Depends(oauth2_scheme), db:Session=Depends(database.get_db)):
-        credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-        )
+# def get_current_user(token:str = Depends(oauth2_scheme), db:Session=Depends(database.get_db)):
+#         credentials_exception = HTTPException(
+#         status_code=status.HTTP_401_UNAUTHORIZED,
+#         detail="Could not validate credentials",
+#         headers={"WWW-Authenticate": "Bearer"},
+#         )
 
-        token = verify_access_token(token, credentials_exception)
-        user = db.query(models.OrganizerInfo).filter(models.OrganizerInfo.org_id==token.id).first()
-        return user
+#         token = verify_access_token(token, credentials_exception)
+#         user = db.query(models.OrganizerInfo).filter(models.OrganizerInfo.org_id==token.id).first()
+#         return user
+
+
+
+from fastapi import Request
+
+def get_current_user(request: Request, db: Session = Depends(database.get_db)):
+    # 1. Manually get the token from the cookie
+    token_cookie = request.cookies.get("access_token")
+    
+    if not token_cookie or not token_cookie.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authorized - No Cookie Found")
+    
+    # 2. Strip "Bearer " to get the actual JWT string
+    token = token_cookie.split(" ")[1]
+    
+    # 3. Use your existing verification logic
+    credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials"
+    )
+
+    token_data = verify_access_token(token, credentials_exception)
+    
+    # 4. Fetch the user
+    user = db.query(models.OrganizerInfo).filter(models.OrganizerInfo.org_id == token_data.id).first()
+    if user is None:
+        raise credentials_exception
+    return user

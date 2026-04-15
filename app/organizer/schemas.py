@@ -2,7 +2,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional, Any
 from datetime import datetime, date
 from decimal import Decimal
-
+from fastapi import Form
+from typing import List
 # Import the ENUMs you defined in models.py
 from app.organizer.models import RoleEnum, AccountStatusEnum, EventStatusEnum, PaymentStatusEnum
 
@@ -164,4 +165,21 @@ class Token(BaseModel):
     token_type: str
 class TokenData(BaseModel):
     id : str
-    
+
+
+class GigCreateRequest:
+    def __init__(
+        self,
+        title: str = Form(...),
+        category: str = Form(...),
+        base_price: float = Form(...),
+        image_url: str = Form(...),
+        addon_names: List[str] = Form([]),
+        addon_prices: List[float] = Form([])
+    ):
+        self.title = title
+        self.category = category
+        self.base_price = base_price
+        self.image_url = image_url
+        self.addon_names = addon_names
+        self.addon_prices = addon_prices
