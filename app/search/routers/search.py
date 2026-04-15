@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import text
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-
+from app.models import ListingImage, OrganizerInfo, ServiceAddon, ServiceListing
 
 router = APIRouter(tags=["search"])
+
+
+def _not_deleted():
+    return or_(ServiceListing.is_deleted.is_(False), ServiceListing.is_deleted.is_(None))
 
 
 @router.get("/search")
@@ -16,72 +20,65 @@ def search(
     max_price: float | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    db.execute(
-        text(
-            "ALTER TABLE service_listings ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false"
-        )
+    q = (
+        db.query(ServiceListing, OrganizerInfo)
+        .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
+        .filter(_not_deleted())
     )
-    db.commit()
-
-    where = ["COALESCE(sl.is_deleted, false) = false"]
-    params = {}
 
     if query:
-        where.append(
-            "(sl.title ILIKE :q OR oi.company_name ILIKE :q OR sl.category ILIKE :q)"
+        term = f"%{query}%"
+        q = q.filter(
+            or_(
+                ServiceListing.title.ilike(term),
+                OrganizerInfo.company_name.ilike(term),
+                ServiceListing.category.ilike(term),
+            )
         )
-        params["q"] = f"%{query}%"
 
     if category:
-        where.append("sl.category = :cat")
-        params["cat"] = category
+        q = q.filter(ServiceListing.category == category)
 
     if min_price is not None:
-        where.append("sl.base_price >= :minp")
-        params["minp"] = min_price
+        q = q.filter(ServiceListing.base_price >= min_price)
 
     if max_price is not None:
-        where.append("sl.base_price <= :maxp")
-        params["maxp"] = max_price
+        q = q.filter(ServiceListing.base_price <= max_price)
 
-    where_sql = " AND ".join(where)
+    rows = q.order_by(ServiceListing.base_price.asc()).all()
 
-    rows = db.execute(
-        text(
-            f"""
-            SELECT
-              sl.id, sl.org_id, oi.company_name, sl.category, sl.title, sl.base_price,
-              (
-                SELECT li.image_url
-                FROM listing_images li
-                WHERE li.listing_id = sl.id
-                ORDER BY li.id
-                LIMIT 1
-              ) AS image_url
-            FROM service_listings sl
-            LEFT JOIN organizer_info oi ON oi.org_id = sl.org_id
-            WHERE {where_sql}
-            ORDER BY sl.base_price ASC
-            """
-        ),
-        params,
-    ).mappings().all()
+    listing_ids = [sl.id for sl, _ in rows]
+    img_map: dict[str, str | None] = {}
+    if listing_ids:
+        imgs = (
+            db.query(ListingImage)
+            .filter(ListingImage.listing_id.in_(listing_ids))
+            .order_by(ListingImage.listing_id, ListingImage.id)
+            .all()
+        )
+        for im in imgs:
+            if im.listing_id not in img_map:
+                img_map[im.listing_id] = im.image_url
 
     out = []
-    for r in rows:
-        addons = db.execute(
-            text(
-                """
-                SELECT id, addon_name, price
-                FROM service_addons
-                WHERE listing_id = :lid
-                ORDER BY id
-                """
-            ),
-            {"lid": r["id"]},
-        ).mappings().all()
-        d = dict(r)
-        d["addons"] = [dict(a) for a in addons]
+    for sl, oi in rows:
+        addons = (
+            db.query(ServiceAddon)
+            .filter(ServiceAddon.listing_id == sl.id)
+            .order_by(ServiceAddon.id)
+            .all()
+        )
+        d = {
+            "id": sl.id,
+            "org_id": sl.org_id,
+            "company_name": oi.company_name if oi else None,
+            "category": sl.category,
+            "title": sl.title,
+            "base_price": float(sl.base_price),
+            "image_url": img_map.get(sl.id),
+            "addons": [
+                {"id": a.id, "addon_name": a.addon_name, "price": float(a.price)} for a in addons
+            ],
+        }
         out.append(d)
     return out
-

@@ -1,141 +1,139 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.database import get_db
 from app.admin.schemas import AdminSetUserStatusIn
-
+from app.database import get_db
+from app.models import (
+    Event,
+    EventAddonSelection,
+    EventOrder,
+    OrganizerInfo,
+    ServiceListing,
+    UserMain,
+    UserStatus,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/listings")
 def listings(db: Session = Depends(get_db)):
-    db.execute(
-        text(
-            "ALTER TABLE service_listings ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false"
-        )
+    rows = (
+        db.query(ServiceListing, OrganizerInfo.company_name)
+        .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
+        .order_by(ServiceListing.id)
+        .all()
     )
-    db.commit()
-    rows = db.execute(
-        text(
-            """
-            SELECT sl.id, sl.org_id, oi.company_name, sl.category, sl.title, sl.base_price,
-                   COALESCE(sl.is_deleted, false) AS is_deleted
-            FROM service_listings sl
-            LEFT JOIN organizer_info oi ON oi.org_id = sl.org_id
-            ORDER BY sl.id
-            """
+    out = []
+    for sl, company_name in rows:
+        out.append(
+            {
+                "id": sl.id,
+                "org_id": sl.org_id,
+                "company_name": company_name,
+                "category": sl.category,
+                "title": sl.title,
+                "base_price": float(sl.base_price),
+                "is_deleted": bool(sl.is_deleted) if sl.is_deleted is not None else False,
+            }
         )
-    ).mappings().all()
-    return [dict(r) for r in rows]
+    return out
 
 
 @router.delete("/listings/{listing_id}")
 def delete_listing(listing_id: str, db: Session = Depends(get_db)):
-    db.execute(
-        text(
-            "ALTER TABLE service_listings ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false"
-        )
-    )
-    db.commit()
-    res = db.execute(
-        text("UPDATE service_listings SET is_deleted = true WHERE id = :id"),
-        {"id": listing_id},
-    )
-    db.commit()
-    if res.rowcount == 0:
+    listing = db.query(ServiceListing).filter(ServiceListing.id == listing_id).first()
+    if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
+    listing.is_deleted = True
+    db.commit()
     return {"message": "Listing deleted"}
 
 
 @router.get("/orders")
 def orders(db: Session = Depends(get_db)):
-    base_rows = db.execute(
-        text(
-            """
-            SELECT
-              eo.id AS order_id,
-              eo.event_id,
-              eo.listing_id,
-              sl.title AS listing_title,
-              e.org_id,
-              oi.company_name AS organizer_name,
-              e.customer_id,
-              ci.full_name AS customer_name,
-              e.event_date,
-              e.status AS event_status,
-              eo.payment_status,
-              eo.base_price_at_booking
-            FROM event_orders eo
-            LEFT JOIN events e ON e.id = eo.event_id
-            LEFT JOIN service_listings sl ON sl.id = eo.listing_id
-            LEFT JOIN organizer_info oi ON oi.org_id = e.org_id
-            LEFT JOIN customer_info ci ON ci.customer_id = e.customer_id
-            ORDER BY eo.id
-            """
+    base_rows = (
+        db.query(EventOrder)
+        .options(
+            joinedload(EventOrder.event).joinedload(Event.customer),
+            joinedload(EventOrder.event).joinedload(Event.organizer),
+            joinedload(EventOrder.listing),
+            joinedload(EventOrder.selections).joinedload(EventAddonSelection.addon),
         )
-    ).mappings().all()
+        .order_by(EventOrder.id)
+        .all()
+    )
 
     out = []
-    for r in base_rows:
-        addons = db.execute(
-            text(
-                """
-                SELECT sel.addon_id, sa.addon_name, sel.unit_price
-                FROM event_addon_selections sel
-                LEFT JOIN service_addons sa ON sa.id = sel.addon_id
-                WHERE sel.order_id = :oid
-                ORDER BY sel.id
-                """
-            ),
-            {"oid": r["order_id"]},
-        ).mappings().all()
-        addons_total = sum([float(a["unit_price"]) for a in addons]) if addons else 0.0
-        base_price = float(r["base_price_at_booking"])
-        d = dict(r)
-        d["event_date"] = str(d["event_date"]) if d.get("event_date") else None
-        d["addons"] = [dict(a) for a in addons]
-        d["addons_total"] = addons_total
-        d["total_price_calculated"] = base_price + addons_total
-        out.append(d)
+    for eo in base_rows:
+        ev = eo.event
+        sl = eo.listing
+        oi = ev.organizer if ev else None
+        ci = ev.customer if ev else None
+        addons = []
+        for sel in eo.selections or []:
+            ad = sel.addon
+            addons.append(
+                {
+                    "addon_id": sel.addon_id,
+                    "addon_name": ad.addon_name if ad else None,
+                    "unit_price": float(sel.unit_price),
+                }
+            )
+        addons_total = sum(a["unit_price"] for a in addons)
+        base_price = float(eo.base_price_at_booking)
+        out.append(
+            {
+                "order_id": eo.id,
+                "event_id": eo.event_id,
+                "listing_id": eo.listing_id,
+                "listing_title": sl.title if sl else None,
+                "org_id": ev.org_id if ev else None,
+                "organizer_name": oi.company_name if oi else None,
+                "customer_id": ev.customer_id if ev else None,
+                "customer_name": ci.full_name if ci else None,
+                "event_date": str(ev.event_date) if ev and ev.event_date else None,
+                "event_status": ev.status if ev else None,
+                "payment_status": eo.payment_status,
+                "base_price_at_booking": base_price,
+                "addons": addons,
+                "addons_total": addons_total,
+                "total_price_calculated": base_price + addons_total,
+            }
+        )
     return out
 
 
 @router.get("/users")
 def users(db: Session = Depends(get_db)):
-    rows = db.execute(
-        text(
-            """
-            SELECT um.id, um.username, um.role, COALESCE(us.status, 'Active') AS status
-            FROM user_main um
-            LEFT JOIN user_status us ON us.user_id = um.id
-            ORDER BY um.id
-            """
-        )
-    ).mappings().all()
-    return [dict(r) for r in rows]
+    rows = (
+        db.query(UserMain, UserStatus)
+        .outerjoin(UserStatus, UserMain.id == UserStatus.user_id)
+        .order_by(UserMain.id)
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "status": s.status if s else "Active",
+        }
+        for u, s in rows
+    ]
 
 
 @router.patch("/users/{user_id}/status")
 def set_status(user_id: str, body: AdminSetUserStatusIn, db: Session = Depends(get_db)):
-    exists = db.execute(
-        text("SELECT id FROM user_main WHERE id = :id"), {"id": user_id}
-    ).first()
-    if not exists:
+    user = db.query(UserMain).filter(UserMain.id == user_id).first()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    db.execute(
-        text(
-            """
-            INSERT INTO user_status (user_id, status, reason)
-            VALUES (:uid, :st::account_status, :rs)
-            ON CONFLICT (user_id)
-            DO UPDATE SET status = EXCLUDED.status, reason = EXCLUDED.reason, updated_at = CURRENT_TIMESTAMP
-            """
-        ),
-        {"uid": user_id, "st": body.status, "rs": body.reason},
-    )
+    row = db.query(UserStatus).filter(UserStatus.user_id == user_id).first()
+    if row:
+        row.status = body.status
+        row.reason = body.reason
+    else:
+        db.add(UserStatus(user_id=user_id, status=body.status, reason=body.reason))
     db.commit()
     return {"message": "User status updated"}
-

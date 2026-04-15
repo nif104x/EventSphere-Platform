@@ -32,4 +32,3 @@ function qs(params) {
   const s = p.toString();
   return s ? `?${s}` : "";
 }
-
