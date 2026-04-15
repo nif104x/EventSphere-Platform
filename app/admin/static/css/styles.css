@@ -19,4 +19,3 @@ th,td{border-top:1px solid var(--b);padding:8px;vertical-align:top}
 thead th{background:#f1f1f1}
 input{border:1px solid var(--b);padding:8px;width:100%}
 .err{border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;padding:8px;margin-top:10px;display:none}
-

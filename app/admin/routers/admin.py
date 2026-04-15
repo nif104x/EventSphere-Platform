@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
 from app.admin.schemas import AdminSetUserStatusIn
@@ -14,6 +16,7 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+templates = Jinja2Templates(directory="app/admin/templates")
 
 
 @router.get("/listings")
@@ -137,3 +140,66 @@ def set_status(user_id: str, body: AdminSetUserStatusIn, db: Session = Depends(g
         db.add(UserStatus(user_id=user_id, status=body.status, reason=body.reason))
     db.commit()
     return {"message": "User status updated"}
+
+
+@router.get("/ui", response_class=HTMLResponse)
+def admin_ui(request: Request, db: Session = Depends(get_db)):
+    listings = (
+        db.query(ServiceListing, OrganizerInfo.company_name)
+        .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
+        .order_by(ServiceListing.id)
+        .all()
+    )
+
+    orders = (
+        db.query(EventOrder)
+        .options(
+            joinedload(EventOrder.event).joinedload(Event.customer),
+            joinedload(EventOrder.event).joinedload(Event.organizer),
+            joinedload(EventOrder.listing),
+            joinedload(EventOrder.selections).joinedload(EventAddonSelection.addon),
+        )
+        .order_by(EventOrder.id)
+        .all()
+    )
+
+    users = (
+        db.query(UserMain, UserStatus)
+        .outerjoin(UserStatus, UserMain.id == UserStatus.user_id)
+        .order_by(UserMain.id)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "admin/admin.html",
+        {"listings": listings, "orders": orders, "users": users},
+    )
+
+
+@router.post("/ui/listings/{listing_id}/delete")
+def admin_ui_delete_listing(listing_id: str, db: Session = Depends(get_db)):
+    listing = db.query(ServiceListing).filter(ServiceListing.id == listing_id).first()
+    if listing:
+        listing.is_deleted = True
+        db.commit()
+    return RedirectResponse(url="/admin/ui", status_code=303)
+
+
+@router.post("/ui/users/{user_id}/status")
+def admin_ui_set_user_status(
+    user_id: str,
+    status: str = Form(...),
+    reason: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    user = db.query(UserMain).filter(UserMain.id == user_id).first()
+    if user:
+        row = db.query(UserStatus).filter(UserStatus.user_id == user_id).first()
+        if row:
+            row.status = status
+            row.reason = reason
+        else:
+            db.add(UserStatus(user_id=user_id, status=status, reason=reason))
+        db.commit()
+    return RedirectResponse(url="/admin/ui", status_code=303)

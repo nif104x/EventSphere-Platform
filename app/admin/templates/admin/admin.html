@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin</title>
+    <link rel="stylesheet" href="/admin/static/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="wrap top">
+        <div class="brand">EventSphere</div>
+        <nav>
+          <a href="/admin/ui">Admin</a> |
+          <a href="/ui/search">Search</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="card">
+        <div class="row">
+          <b>Admin</b>
+          <span class="muted">Listings / Orders / Users</span>
+          <div class="sp"></div>
+          <a class="btn" href="/ui">Home</a>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="tList" class="btn p" type="button">Listings</button>
+          <button id="tOrd" class="btn" type="button">Orders</button>
+          <button id="tUsr" class="btn" type="button">Users</button>
+        </div>
+      </div>
+
+      <div id="pList" class="card">
+        <table>
+          <thead><tr><th>ID</th><th>Org</th><th>Title</th><th>Price</th><th></th></tr></thead>
+          <tbody>
+            {% if not listings %}
+              <tr><td colspan="5" class="muted">No listings.</td></tr>
+            {% else %}
+              {% for sl, company_name in listings %}
+                <tr>
+                  <td class="mono">{{ sl.id }}</td>
+                  <td>{{ company_name or sl.org_id }}</td>
+                  <td>{{ sl.title }}</td>
+                  <td>{{ '%.2f'|format(sl.base_price) }}</td>
+                  <td style="text-align:right">
+                    <form method="post" action="/admin/ui/listings/{{ sl.id }}/delete" style="display:inline">
+                      <button class="btn d" type="submit" {% if sl.is_deleted %}disabled{% endif %}>Del</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div id="pOrd" class="card" style="display:none">
+        <table>
+          <thead><tr><th>Order</th><th>Customer</th><th>Org</th><th>Date</th><th>Status</th><th>Pay</th><th>Total</th></tr></thead>
+          <tbody>
+            {% if not orders %}
+              <tr><td colspan="7" class="muted">No orders.</td></tr>
+            {% else %}
+              {% for eo in orders %}
+                {% set ev = eo.event %}
+                <tr>
+                  <td class="mono">{{ eo.id }}</td>
+                  <td>{{ ev.customer.full_name if ev and ev.customer else '' }}</td>
+                  <td>{{ ev.organizer.company_name if ev and ev.organizer else '' }}</td>
+                  <td>{{ ev.event_date if ev else '-' }}</td>
+                  <td>{{ ev.status if ev else '-' }}</td>
+                  <td>{{ eo.payment_status or '-' }}</td>
+                  <td>
+                    {% set base = eo.base_price_at_booking %}
+                    {% set addons_total = (eo.selections | map(attribute='unit_price') | sum) if eo.selections else 0 %}
+                    {{ '%.2f'|format(base + addons_total) }}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div id="pUsr" class="card" style="display:none">
+        <table>
+          <thead><tr><th>ID</th><th>User</th><th>Role</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% if not users %}
+              <tr><td colspan="5" class="muted">No users.</td></tr>
+            {% else %}
+              {% for u, s in users %}
+                {% set st = s.status if s else 'Active' %}
+                {% set next = 'Suspended' if st == 'Active' else 'Active' %}
+                <tr>
+                  <td class="mono">{{ u.id }}</td>
+                  <td>{{ u.username }}</td>
+                  <td>{{ u.role }}</td>
+                  <td>{{ st }}</td>
+                  <td style="text-align:right">
+                    <form method="post" action="/admin/ui/users/{{ u.id }}/status" style="display:inline">
+                      <input type="hidden" name="status" value="{{ next }}" />
+                      <input type="hidden" name="reason" value="" />
+                      <button class="btn p" type="submit">{{ 'Ban' if st == 'Active' else 'Unban' }}</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script>
+      const tList = document.getElementById("tList");
+      const tOrd = document.getElementById("tOrd");
+      const tUsr = document.getElementById("tUsr");
+      const pList = document.getElementById("pList");
+      const pOrd = document.getElementById("pOrd");
+      const pUsr = document.getElementById("pUsr");
+
+      function tab(name) {
+        pList.style.display = name === "list" ? "block" : "none";
+        pOrd.style.display = name === "ord" ? "block" : "none";
+        pUsr.style.display = name === "usr" ? "block" : "none";
+        tList.className = name === "list" ? "btn p" : "btn";
+        tOrd.className = name === "ord" ? "btn p" : "btn";
+        tUsr.className = name === "usr" ? "btn p" : "btn";
+      }
+
+      tList.onclick = () => tab("list");
+      tOrd.onclick = () => tab("ord");
+      tUsr.onclick = () => tab("usr");
+    </script>
+  </body>
+</html>

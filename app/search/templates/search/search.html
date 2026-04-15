@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search</title>
+    <link rel="stylesheet" href="/search/static/css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="wrap top">
+        <div class="brand">EventSphere</div>
+        <nav>
+          <a href="/admin/ui">Admin</a> |
+          <a href="/ui/search">Search</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="card">
+        <div class="row">
+          <b>Search</b>
+          <span class="muted">title / org / category</span>
+          <div class="sp"></div>
+          <a class="btn" href="/ui">Home</a>
+        </div>
+        <form class="row" style="margin-top:8px" method="get" action="/ui/search">
+          <input name="query" placeholder="query" value="{{ filters.query }}" />
+          <input name="category" placeholder="category" value="{{ filters.category }}" />
+          <input name="min_price" placeholder="min" value="{{ filters.min_price }}" />
+          <input name="max_price" placeholder="max" value="{{ filters.max_price }}" />
+          <button class="btn p" type="submit">Go</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="muted">Results</div>
+        {% if not rows %}
+          <div class="muted" style="margin-top:8px">No results.</div>
+        {% else %}
+          {% for sl, oi in rows %}
+            <div style="border-top:1px solid #ddd; padding:8px 0">
+              <b>{{ sl.title }}</b> <span class="muted">({{ sl.category }})</span><br/>
+              <span class="muted">{{ oi.company_name if oi else sl.org_id }}</span><br/>
+              <span>Base: {{ '%.2f'|format(sl.base_price) }}</span>
+              {% set img = img_map.get(sl.id) %}
+              {% if img %}
+                <div class="muted" style="margin-top:6px">Image: {{ img }}</div>
+              {% endif %}
+              {% set addons = addon_map.get(sl.id, []) %}
+              {% if addons %}
+                <div class="muted" style="margin-top:6px">Addons:</div>
+                <ul style="margin:6px 0 0 16px">
+                  {% for a in addons %}
+                    <li>{{ a.addon_name }} — {{ '%.2f'|format(a.price) }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </main>
+  </body>
+</html>
