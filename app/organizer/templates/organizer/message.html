@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages | EventSphere</title>
+    <link
+      href="{{ url_for('static', path='css/message.css') }}"
+      rel="stylesheet"
+    />
+</head>
+<body>
+    <nav class="sidebar">
+        <h2>EventSphere</h2>
+        <ul>
+            <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+            <li><a href="{{ url_for('creategig') }}">Create Gig</a></li>
+            <li><a href="{{ url_for('message') }}" class="active">Messages</a></li>
+        </ul>
+    </nav>
+
+    <main class="chat-container">
+        <aside class="chat-sidebar">
+            <div class="chat-header">
+                <h3>Active Inquiries</h3>
+            </div>
+            <div class="contact-list">
+                <div class="contact active">
+                    <h4>John Smith</h4>
+                    <p>Regarding: Wedding Decor...</p>
+                    <span class="time">10:42 AM</span>
+                </div>
+                <div class="contact">
+                    <h4>Sarah Jenkins</h4>
+                    <p>Are you available on the 15th?</p>
+                    <span class="time">Yesterday</span>
+                </div>
+            </div>
+        </aside>
+
+        <section class="chat-window">
+            <div class="chat-header">
+                <h3>John Smith <span>(Event: EVT-992A)</span></h3>
+            </div>
+            
+            <div class="messages-area" id="msgArea">
+                <div class="message received">
+                    <p>Hi, I loved your portfolio! I'm looking to book the Premium Decor gig for a wedding on June 12th. Does it include the smoke machine addon?</p>
+                    <span class="timestamp">10:40 AM</span>
+                </div>
+                <div class="message sent">
+                    <p>Hello John! Yes, I am available on June 12th. The smoke machine is an extra $150 addon. I can attach it to the order for you!</p>
+                    <span class="timestamp">10:42 AM</span>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <input type="text" id="msgInput" placeholder="Type a message to John...">
+                <button class="btn-send" onclick="sendMessage()">Send</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const area = document.getElementById('msgArea');
+            if (input.value.trim() === '') return;
+
+            // Create new message bubble
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message sent';
+            msgDiv.innerHTML = `<p>${input.value}</p><span class="timestamp">Just now</span>`;
+            
+            area.appendChild(msgDiv);
+            input.value = '';
+            
+            // Auto-scroll to bottom
+            area.scrollTop = area.scrollHeight;
+        }
+
+        // Send on Enter key
+        document.getElementById('msgInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

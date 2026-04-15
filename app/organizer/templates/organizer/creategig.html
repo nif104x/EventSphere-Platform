@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Gig | EventSphere</title>
+    <link
+      href="{{ url_for('static', path='css/creategig.css') }}"
+      rel="stylesheet"
+    />
+</head>
+<body>
+    <nav class="sidebar">
+        <h2>EventSphere</h2>
+        <ul>
+            <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+            <li><a href="{{ url_for('creategig') }}" class="active">Create Gig</a></li>
+            <li><a href="{{ url_for('message') }}">Messages</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content">
+        <header>
+            <h1>Publish a New Service</h1>
+        </header>
+
+        <form class="gig-form" id="gigForm">
+            <div class="form-section">
+                <h3>1. Core Details</h3>
+                <div class="input-group">
+                    <label>Listing Title</label>
+                    <input type="text" placeholder="e.g., Professional DJ Services" required>
+                </div>
+                <div class="row">
+                    <div class="input-group">
+                        <label>Category</label>
+                        <select required>
+                            <option value="Entertainment">Entertainment</option>
+                            <option value="Catering">Catering</option>
+                            <option value="Decor">Decor</option>
+                            <option value="Photography">Photography</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Base Price ($)</label>
+                        <input type="number" step="0.01" placeholder="500.00" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>2. Listing Image</h3>
+                <div class="input-group">
+                    <label>Image URL</label>
+                    <input type="url" placeholder="https://example.com/image.jpg" required>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="addon-header">
+                    <h3>3. Service Addons</h3>
+                    <button type="button" class="btn-secondary" onclick="addAddonRow()">+ Add Extra</button>
+                </div>
+                <div id="addonContainer">
+                    <div class="row addon-row">
+                        <div class="input-group">
+                            <input type="text" placeholder="Addon Name (e.g., Smoke Machine)">
+                        </div>
+                        <div class="input-group">
+                            <input type="number" step="0.01" placeholder="Price ($)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary submit-btn">Publish Gig to EventSphere</button>
+        </form>
+    </main>
+
+    <script>
+        // Simple JS to dynamically add new Addon rows
+        function addAddonRow() {
+            const container = document.getElementById('addonContainer');
+            const row = document.createElement('div');
+            row.className = 'row addon-row';
+            row.innerHTML = `
+                <div class="input-group">
+                    <input type="text" placeholder="Addon Name">
+                </div>
+                <div class="input-group">
+                    <input type="number" step="0.01" placeholder="Price ($)">
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        // Prevent real submission for mockup
+        document.getElementById('gigForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            alert("Gig Data prepared for FastAPI POST request!");
+            window.location.href = "dashboard.html";
+        });
+    </script>
+</body>
+</html>

@@ -6,6 +6,13 @@ from app.organizer import models, schemas, utils, ouath2
 
 import uuid
 
+# For jinja2 templates
+from fastapi import Request
+from fastapi.templating import Jinja2Templates
+
+
+templates = Jinja2Templates(directory="app/organizer/templates")
+
 
 router = APIRouter(
     prefix="/organizer",
@@ -13,10 +20,23 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=list[schemas.OrganizerInfoSchema])
-def homePage(db: Session=Depends(get_db), current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)):
-    users = db.query(models.OrganizerInfo).all()
-    return users
+
+# @router.get("/", response_model=list[schemas.OrganizerInfoSchema])
+# def homePage(db: Session=Depends(get_db), current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)):
+#     users = db.query(models.OrganizerInfo).all()
+#     return users
+
+@router.get("/dashboard", name="dashboard", include_in_schema=False)
+def dashboard(request: Request):
+    return templates.TemplateResponse(request, "organizer/dashboard.html", {'data':1})
+
+@router.get("/creategig", name="creategig", include_in_schema=False)
+def creategig(request: Request):
+    return templates.TemplateResponse(request, "organizer/creategig.html", {'data':1})
+
+@router.get("/message", name="message", include_in_schema=False)
+def message(request: Request):
+    return templates.TemplateResponse(request, "organizer/message.html", {'data':1})
 
 
 
@@ -46,5 +66,8 @@ def user_registration(data:schemas.OrganizerRegisterSchema, db : Session=Depends
     db.add(organizer)
     db.commit()
     return{"message": "Organizer created successfully"}
+
+
+
 
 
