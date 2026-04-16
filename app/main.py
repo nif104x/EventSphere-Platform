@@ -39,8 +39,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/admin/static", StaticFiles(directory="app/admin/static"), name="admin_static")
-app.mount("/search/static", StaticFiles(directory="app/search/static"), name="search_static")
+app.mount(
+    "/admin/static", StaticFiles(directory="app/admin/static"), name="admin_static"
+)
+app.mount(
+    "/search/static", StaticFiles(directory="app/search/static"), name="search_static"
+)
 
 app.include_router(admin.router)
 app.include_router(search.router)

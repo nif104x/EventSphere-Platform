@@ -21,8 +21,12 @@ class UserMain(Base):
     password = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False)
 
-    customer_profile = relationship("CustomerInfo", back_populates="user", uselist=False)
-    organizer_profile = relationship("OrganizerInfo", back_populates="user", uselist=False)
+    customer_profile = relationship(
+        "CustomerInfo", back_populates="user", uselist=False
+    )
+    organizer_profile = relationship(
+        "OrganizerInfo", back_populates="user", uselist=False
+    )
     admin_profile = relationship("AdminInfo", back_populates="user", uselist=False)
     status_row = relationship("UserStatus", back_populates="user", uselist=False)
 
@@ -42,7 +46,9 @@ class CustomerInfo(Base):
 
 class OrganizerInfo(Base):
     __tablename__ = "organizer_info"
-    org_id = Column(String(50), ForeignKey("user_main.id", ondelete="CASCADE"), primary_key=True)
+    org_id = Column(
+        String(50), ForeignKey("user_main.id", ondelete="CASCADE"), primary_key=True
+    )
     company_name = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False)
     primary_category = Column(String(50))
@@ -54,7 +60,9 @@ class OrganizerInfo(Base):
 
 class AdminInfo(Base):
     __tablename__ = "admin_info"
-    admin_id = Column(String(50), ForeignKey("user_main.id", ondelete="CASCADE"), primary_key=True)
+    admin_id = Column(
+        String(50), ForeignKey("user_main.id", ondelete="CASCADE"), primary_key=True
+    )
     access_level = Column(String(50))
 
     user = relationship("UserMain", back_populates="admin_profile")
@@ -62,7 +70,9 @@ class AdminInfo(Base):
 
 class UserStatus(Base):
     __tablename__ = "user_status"
-    user_id = Column(String(50), ForeignKey("user_main.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(
+        String(50), ForeignKey("user_main.id", ondelete="CASCADE"), primary_key=True
+    )
     status = Column(String(50))
     reason = Column(Text)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -87,7 +97,9 @@ class ServiceListing(Base):
 class ListingImage(Base):
     __tablename__ = "listing_images"
     id = Column(String(50), primary_key=True)
-    listing_id = Column(String(50), ForeignKey("service_listings.id", ondelete="CASCADE"))
+    listing_id = Column(
+        String(50), ForeignKey("service_listings.id", ondelete="CASCADE")
+    )
     image_url = Column(Text, nullable=False)
 
     listing = relationship("ServiceListing", back_populates="images")
@@ -96,7 +108,9 @@ class ListingImage(Base):
 class ServiceAddon(Base):
     __tablename__ = "service_addons"
     id = Column(String(50), primary_key=True)
-    listing_id = Column(String(50), ForeignKey("service_listings.id", ondelete="CASCADE"))
+    listing_id = Column(
+        String(50), ForeignKey("service_listings.id", ondelete="CASCADE")
+    )
     addon_name = Column(String(100), nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
 
