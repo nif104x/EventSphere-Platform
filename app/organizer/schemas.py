@@ -166,7 +166,7 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     id : str
 
-
+## schema for form handling
 class GigCreateRequest:
     def __init__(
         self,
@@ -183,3 +183,17 @@ class GigCreateRequest:
         self.image_url = image_url
         self.addon_names = addon_names
         self.addon_prices = addon_prices
+
+
+from fastapi import Form
+
+class ChatRequest:
+    def __init__(
+            self,
+            event_id: str = Form(...),
+            room_id: str = Form(...), 
+            text: str = Form(...)
+    ):
+        self.event_id = event_id  
+        self.room_id = room_id   
+        self.text = text         

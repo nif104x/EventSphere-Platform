@@ -126,25 +126,65 @@ def handle_create_gig(
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 @router.get("/message", name="message", include_in_schema=False)
-def message(request: Request):
-    return templates.TemplateResponse(request, "organizer/message.html", {'data':1})
+def message(request: Request,
+            db: Session=Depends(get_db),
+            current_user: models.OrganizerInfo=Depends(ouath2.get_current_user)
+):
+    rooms = db.query(models.ChatRoom).filter(
+        models.ChatRoom.org_id == current_user.org_id
+    ).all()
+
+    return templates.TemplateResponse(
+        request, 
+        "organizer/message.html", 
+        {"rooms": rooms}
+    )
 
 
 
+@router.get("/messages/{room_id}", include_in_schema=False)
+def get_room_messages(
+    room_id: str, 
+    db: Session = Depends(get_db),
+    current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)
+):
+    
+    messages = db.query(models.Message).filter(
+        models.Message.room_id == room_id
+    ).order_by(models.Message.timestamp.asc()).all()
+
+    # Format them for JavaScript
+    msg_list = []
+    for m in messages:
+        msg_list.append({
+            "text": m.message_text,
+            # We need to know who sent it to style it left (received) or right (sent)
+            "is_mine": m.sender_id == current_user.org_id, 
+            "time": m.timestamp.strftime("%I:%M %p") 
+        })
+
+    return {"messages": msg_list}
+
+from app.chat.chat import save_chat_message
+@router.post("/message")
+def organizer_send_message(
+    room_id: str = Form(...),
+    text: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)
+):
+    # Pass the organizer's ID as the sender
+    saved_msg = save_chat_message(
+        db=db, 
+        room_id=room_id, 
+        sender_id=current_user.org_id, 
+        text=text
+    )
+    return {"status": "success", "msg_id": saved_msg.id}
+
+
+## Registration ##
 @router.post("/registration", status_code=status.HTTP_201_CREATED)
 def user_registration(data:schemas.OrganizerRegisterSchema, db : Session=Depends(get_db)):
     new_user_id = f"ORG-{uuid.uuid4().hex[:6].upper()}"

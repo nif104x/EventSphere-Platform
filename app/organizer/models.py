@@ -126,7 +126,7 @@ class Event(Base):
 
     # RELATIONSHIP (1-to-1): One event has exactly one master order
     order = relationship("EventOrder", backref="event", uselist=False, cascade="all, delete-orphan")
-
+    customer = relationship("CustomerInfo", backref="events")
 
 class EventOrder(Base):
     __tablename__ = 'event_orders'
@@ -142,7 +142,7 @@ class EventOrder(Base):
     selections = relationship("EventAddonSelection", backref="order", cascade="all, delete-orphan")
     milestones = relationship("PaymentMilestone", backref="order", cascade="all, delete-orphan")
     financial_summary = relationship("FinancialSummary", backref="order", uselist=False, cascade="all, delete-orphan")
-
+    listing = relationship("ServiceListing", backref="orders")
 
 class EventAddonSelection(Base):
     __tablename__ = 'event_addon_selections'
