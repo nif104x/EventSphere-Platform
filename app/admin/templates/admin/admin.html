@@ -1,140 +1,207 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin</title>
-    <link rel="stylesheet" href="/admin/static/css/styles.css" />
+    <title>Admin | EventSphere</title>
+    <link href="/assets/css/dashboard.css" rel="stylesheet" />
   </head>
   <body>
-    <header>
-      <div class="wrap top">
-        <div class="brand">EventSphere</div>
-        <nav>
-          <a href="/admin/ui">Admin</a> |
-          <a href="/ui/search">Search</a>
-        </nav>
-      </div>
-    </header>
+    {% include "partials/nav.html" %}
 
-    <main class="wrap">
-      <div class="card">
-        <div class="row">
-          <b>Admin</b>
-          <span class="muted">Listings / Orders / Users</span>
-          <div class="sp"></div>
-          <a class="btn" href="/ui">Home</a>
+    <main class="main-content">
+      <header>
+        <h1>Admin</h1>
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+          <button class="btn-primary" type="button" id="tabBtnListings">Listings</button>
+          <button class="btn-primary" type="button" id="tabBtnOrders">Orders</button>
+          <button class="btn-primary" type="button" id="tabBtnUsers">Users</button>
         </div>
-        <div class="row" style="margin-top:8px">
-          <button id="tList" class="btn p" type="button">Listings</button>
-          <button id="tOrd" class="btn" type="button">Orders</button>
-          <button id="tUsr" class="btn" type="button">Users</button>
-        </div>
-      </div>
+      </header>
 
-      <div id="pList" class="card">
-        <table>
-          <thead><tr><th>ID</th><th>Org</th><th>Title</th><th>Price</th><th></th></tr></thead>
-          <tbody>
-            {% if not listings %}
-              <tr><td colspan="5" class="muted">No listings.</td></tr>
-            {% else %}
+      <section class="dashboard-section" id="tabListings">
+        <div class="section-header">
+          <h2>Listings</h2>
+          <span class="badge warning">{{ listings|length }} Total</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Org</th>
+                <th>Title</th>
+                <th>Price</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if not listings %}
+              <tr>
+                <td colspan="6">No listings.</td>
+              </tr>
+              {% endif %}
               {% for sl, company_name in listings %}
-                <tr>
-                  <td class="mono">{{ sl.id }}</td>
-                  <td>{{ company_name or sl.org_id }}</td>
-                  <td>{{ sl.title }}</td>
-                  <td>{{ '%.2f'|format(sl.base_price) }}</td>
-                  <td style="text-align:right">
-                    <form method="post" action="/admin/ui/listings/{{ sl.id }}/delete" style="display:inline">
-                      <button class="btn d" type="submit" {% if sl.is_deleted %}disabled{% endif %}>Del</button>
-                    </form>
-                  </td>
-                </tr>
+              <tr>
+                <td>{{ sl.id }}</td>
+                <td>{{ company_name or sl.org_id }}</td>
+                <td>{{ sl.title }}</td>
+                <td>${{ "{:,.2f}".format(sl.base_price) }}</td>
+                <td>
+                  {% if sl.is_deleted %}
+                  <span class="status" style="background:#fee2e2;color:#991b1b">Deleted</span>
+                  {% else %}
+                  <span class="status completed">Active</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <form method="post" action="/admin/ui/listings/{{ sl.id }}/toggle-delete" style="display:inline">
+                    <input type="hidden" name="tab" class="tabField" value="listings" />
+                    <button class="btn-sm {{ 'success' if sl.is_deleted else 'danger' }}" type="submit">
+                      {{ "Restore" if sl.is_deleted else "Delete" }}
+                    </button>
+                  </form>
+                </td>
+              </tr>
               {% endfor %}
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-      <div id="pOrd" class="card" style="display:none">
-        <table>
-          <thead><tr><th>Order</th><th>Customer</th><th>Org</th><th>Date</th><th>Status</th><th>Pay</th><th>Total</th></tr></thead>
-          <tbody>
-            {% if not orders %}
-              <tr><td colspan="7" class="muted">No orders.</td></tr>
-            {% else %}
+      <section class="dashboard-section" id="tabOrders" style="display:none">
+        <div class="section-header">
+          <h2>Orders</h2>
+          <span class="badge warning">{{ orders|length }} Total</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Org</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Pay</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if not orders %}
+              <tr>
+                <td colspan="7">No orders.</td>
+              </tr>
+              {% endif %}
               {% for eo in orders %}
-                {% set ev = eo.event %}
-                <tr>
-                  <td class="mono">{{ eo.id }}</td>
-                  <td>{{ ev.customer.full_name if ev and ev.customer else '' }}</td>
-                  <td>{{ ev.organizer.company_name if ev and ev.organizer else '' }}</td>
-                  <td>{{ ev.event_date if ev else '-' }}</td>
-                  <td>{{ ev.status if ev else '-' }}</td>
-                  <td>{{ eo.payment_status or '-' }}</td>
-                  <td>
-                    {% set base = eo.base_price_at_booking %}
-                    {% set addons_total = (eo.selections | map(attribute='unit_price') | sum) if eo.selections else 0 %}
-                    {{ '%.2f'|format(base + addons_total) }}
-                  </td>
-                </tr>
+              {% set ev = eo.event %}
+              <tr>
+                <td>{{ eo.id }}</td>
+                <td>{{ ev.customer.full_name if ev and ev.customer else "" }}</td>
+                <td>{{ ev.organizer.company_name if ev and ev.organizer else "" }}</td>
+                <td>{{ ev.event_date if ev else "N/A" }}</td>
+                <td>{{ ev.status if ev else "N/A" }}</td>
+                <td>{{ eo.payment_status or "N/A" }}</td>
+                <td>
+                  {% set base = eo.base_price_at_booking %}
+                  {% set addons_total = (eo.selections | map(attribute="unit_price") | sum) if eo.selections else 0 %}
+                  ${{ "{:,.2f}".format(base + addons_total) }}
+                </td>
+              </tr>
               {% endfor %}
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-      <div id="pUsr" class="card" style="display:none">
-        <table>
-          <thead><tr><th>ID</th><th>User</th><th>Role</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            {% if not users %}
-              <tr><td colspan="5" class="muted">No users.</td></tr>
-            {% else %}
+      <section class="dashboard-section" id="tabUsers" style="display:none">
+        <div class="section-header">
+          <h2>Users</h2>
+          <span class="badge warning">{{ users|length }} Total</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>User</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if not users %}
+              <tr>
+                <td colspan="5">No users.</td>
+              </tr>
+              {% endif %}
               {% for u, s in users %}
-                {% set st = s.status if s else 'Active' %}
-                {% set next = 'Suspended' if st == 'Active' else 'Active' %}
-                <tr>
-                  <td class="mono">{{ u.id }}</td>
-                  <td>{{ u.username }}</td>
-                  <td>{{ u.role }}</td>
-                  <td>{{ st }}</td>
-                  <td style="text-align:right">
-                    <form method="post" action="/admin/ui/users/{{ u.id }}/status" style="display:inline">
-                      <input type="hidden" name="status" value="{{ next }}" />
-                      <input type="hidden" name="reason" value="" />
-                      <button class="btn p" type="submit">{{ 'Ban' if st == 'Active' else 'Unban' }}</button>
-                    </form>
-                  </td>
-                </tr>
+              {% set st = s.status if s else "Active" %}
+              {% set next = "Suspended" if st == "Active" else "Active" %}
+              <tr>
+                <td>{{ u.id }}</td>
+                <td>{{ u.username }}</td>
+                <td>{{ u.role }}</td>
+                <td>{{ st }}</td>
+                <td>
+                  <form method="post" action="/admin/ui/users/{{ u.id }}/status" style="display:inline">
+                    <input type="hidden" name="status" value="{{ next }}" />
+                    <input type="hidden" name="reason" value="" />
+                    <input type="hidden" name="tab" class="tabField" value="users" />
+                    <button class="btn-sm success" type="submit">{{ "Ban" if st == "Active" else "Unban" }}</button>
+                  </form>
+                </td>
+              </tr>
               {% endfor %}
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <script>
-      const tList = document.getElementById("tList");
-      const tOrd = document.getElementById("tOrd");
-      const tUsr = document.getElementById("tUsr");
-      const pList = document.getElementById("pList");
-      const pOrd = document.getElementById("pOrd");
-      const pUsr = document.getElementById("pUsr");
+      const tabListings = document.getElementById("tabListings");
+      const tabOrders = document.getElementById("tabOrders");
+      const tabUsers = document.getElementById("tabUsers");
+      const btnListings = document.getElementById("tabBtnListings");
+      const btnOrders = document.getElementById("tabBtnOrders");
+      const btnUsers = document.getElementById("tabBtnUsers");
 
-      function tab(name) {
-        pList.style.display = name === "list" ? "block" : "none";
-        pOrd.style.display = name === "ord" ? "block" : "none";
-        pUsr.style.display = name === "usr" ? "block" : "none";
-        tList.className = name === "list" ? "btn p" : "btn";
-        tOrd.className = name === "ord" ? "btn p" : "btn";
-        tUsr.className = name === "usr" ? "btn p" : "btn";
+      function setTabFields(value) {
+        document.querySelectorAll(".tabField").forEach((el) => {
+          el.value = value;
+        });
       }
 
-      tList.onclick = () => tab("list");
-      tOrd.onclick = () => tab("ord");
-      tUsr.onclick = () => tab("usr");
+      function showTab(name) {
+        tabListings.style.display = name === "listings" ? "block" : "none";
+        tabOrders.style.display = name === "orders" ? "block" : "none";
+        tabUsers.style.display = name === "users" ? "block" : "none";
+        btnListings.className = "btn-primary";
+        btnOrders.className = "btn-primary";
+        btnUsers.className = "btn-primary";
+        btnListings.style.opacity = name === "listings" ? "1" : "0.55";
+        btnOrders.style.opacity = name === "orders" ? "1" : "0.55";
+        btnUsers.style.opacity = name === "users" ? "1" : "0.55";
+        setTabFields(name);
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", name);
+        history.replaceState(null, "", url.toString());
+      }
+
+      btnListings.onclick = () => showTab("listings");
+      btnOrders.onclick = () => showTab("orders");
+      btnUsers.onclick = () => showTab("users");
+
+      const params = new URLSearchParams(window.location.search);
+      const initial = params.get("tab");
+      if (initial === "orders" || initial === "users" || initial === "listings") {
+        showTab(initial);
+      } else {
+        showTab("listings");
+      }
     </script>
   </body>
 </html>

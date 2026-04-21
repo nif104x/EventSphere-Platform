@@ -162,5 +162,7 @@ def search_ui(
                 "min_price": "" if min_price is None else str(min_price),
                 "max_price": "" if max_price is None else str(max_price),
             },
+            "nav_active": "search",
+            "role_badge": "Search",
         },
     )

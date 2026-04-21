@@ -1,0 +1,8 @@
+<nav class="sidebar">
+  <h2>EventSphere</h2>
+  <p class="role-badge">{{ role_badge }}</p>
+  <ul>
+    <li><a href="/admin/ui" class="{{ 'active' if nav_active == 'admin' else '' }}">Admin</a></li>
+    <li><a href="/ui/search" class="{{ 'active' if nav_active == 'search' else '' }}">Search</a></li>
+  </ul>
+</nav>

@@ -173,17 +173,31 @@ def admin_ui(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "admin/admin.html",
-        {"listings": listings, "orders": orders, "users": users},
+        {
+            "listings": listings,
+            "orders": orders,
+            "users": users,
+            "nav_active": "admin",
+            "role_badge": "Admin",
+        },
     )
 
 
-@router.post("/ui/listings/{listing_id}/delete")
-def admin_ui_delete_listing(listing_id: str, db: Session = Depends(get_db)):
+@router.post("/ui/listings/{listing_id}/toggle-delete")
+def admin_ui_toggle_listing_deleted(
+    listing_id: str,
+    tab: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
     listing = db.query(ServiceListing).filter(ServiceListing.id == listing_id).first()
     if listing:
-        listing.is_deleted = True
+        if listing.is_deleted:
+            listing.is_deleted = False
+        else:
+            listing.is_deleted = True
         db.commit()
-    return RedirectResponse(url="/admin/ui", status_code=303)
+    safe_tab = tab if tab in {"listings", "orders", "users"} else "listings"
+    return RedirectResponse(url=f"/admin/ui?tab={safe_tab}", status_code=303)
 
 
 @router.post("/ui/users/{user_id}/status")
@@ -191,6 +205,7 @@ def admin_ui_set_user_status(
     user_id: str,
     status: str = Form(...),
     reason: str | None = Form(default=None),
+    tab: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     user = db.query(UserMain).filter(UserMain.id == user_id).first()
@@ -202,4 +217,5 @@ def admin_ui_set_user_status(
         else:
             db.add(UserStatus(user_id=user_id, status=status, reason=reason))
         db.commit()
-    return RedirectResponse(url="/admin/ui", status_code=303)
+    safe_tab = tab if tab in {"listings", "orders", "users"} else "users"
+    return RedirectResponse(url=f"/admin/ui?tab={safe_tab}", status_code=303)

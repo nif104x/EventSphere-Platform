@@ -1,66 +1,86 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Search</title>
-    <link rel="stylesheet" href="/search/static/css/styles.css" />
+    <title>Search | EventSphere</title>
+    <link href="/assets/css/dashboard.css" rel="stylesheet" />
   </head>
   <body>
-    <header>
-      <div class="wrap top">
-        <div class="brand">EventSphere</div>
-        <nav>
-          <a href="/admin/ui">Admin</a> |
-          <a href="/ui/search">Search</a>
-        </nav>
-      </div>
-    </header>
+    {% include "partials/nav.html" %}
 
-    <main class="wrap">
-      <div class="card">
-        <div class="row">
-          <b>Search</b>
-          <span class="muted">title / org / category</span>
-          <div class="sp"></div>
-          <a class="btn" href="/ui">Home</a>
+    <main class="main-content">
+      <header>
+        <h1>Search</h1>
+        <button class="btn-primary" type="submit" form="searchForm">Run Search</button>
+      </header>
+
+      <section class="dashboard-section">
+        <div class="section-header">
+          <h2>Filters</h2>
+          <span class="badge warning">{{ rows|length }} Results</span>
         </div>
-        <form class="row" style="margin-top:8px" method="get" action="/ui/search">
-          <input name="query" placeholder="query" value="{{ filters.query }}" />
-          <input name="category" placeholder="category" value="{{ filters.category }}" />
-          <input name="min_price" placeholder="min" value="{{ filters.min_price }}" />
-          <input name="max_price" placeholder="max" value="{{ filters.max_price }}" />
-          <button class="btn p" type="submit">Go</button>
-        </form>
-      </div>
+        <div class="table-container" style="padding:1rem 1.5rem">
+          <form id="searchForm" method="get" action="/ui/search" class="stats-grid" style="margin-bottom:0">
+            <div class="stat-card" style="margin:0">
+              <h3>Query</h3>
+              <input name="query" value="{{ filters.query }}" style="width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:.75rem" />
+            </div>
+            <div class="stat-card" style="margin:0">
+              <h3>Category</h3>
+              <input name="category" value="{{ filters.category }}" style="width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:.75rem" />
+            </div>
+            <div class="stat-card" style="margin:0">
+              <h3>Min Price</h3>
+              <input name="min_price" value="{{ filters.min_price }}" style="width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:.75rem" />
+            </div>
+            <div class="stat-card" style="margin:0">
+              <h3>Max Price</h3>
+              <input name="max_price" value="{{ filters.max_price }}" style="width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:.75rem" />
+            </div>
+          </form>
+        </div>
+      </section>
 
-      <div class="card">
-        <div class="muted">Results</div>
+      <section class="dashboard-section">
+        <div class="section-header">
+          <h2>Results</h2>
+        </div>
+
         {% if not rows %}
-          <div class="muted" style="margin-top:8px">No results.</div>
+        <div class="table-container" style="padding:1rem 1.5rem">No results.</div>
         {% else %}
+        <div class="gigs-grid">
           {% for sl, oi in rows %}
-            <div style="border-top:1px solid #ddd; padding:8px 0">
-              <b>{{ sl.title }}</b> <span class="muted">({{ sl.category }})</span><br/>
-              <span class="muted">{{ oi.company_name if oi else sl.org_id }}</span><br/>
-              <span>Base: {{ '%.2f'|format(sl.base_price) }}</span>
-              {% set img = img_map.get(sl.id) %}
-              {% if img %}
-                <div class="muted" style="margin-top:6px">Image: {{ img }}</div>
-              {% endif %}
+          {% set img = img_map.get(sl.id) %}
+          <div class="gig-card">
+            {% if img %}
+            <img src="{{ img }}" alt="{{ sl.title }}" />
+            {% else %}
+            <div style="width:120px;background:linear-gradient(135deg,#3b82f6,#10b981)"></div>
+            {% endif %}
+            <div class="gig-info">
+              <span class="category">{{ sl.category }}</span>
+              <h4>{{ sl.title }}</h4>
+              <p class="price">From ${{ "{:,.2f}".format(sl.base_price) }}</p>
+              <p class="reviewer" style="margin-top:.35rem">{{ oi.company_name if oi else sl.org_id }}</p>
               {% set addons = addon_map.get(sl.id, []) %}
               {% if addons %}
-                <div class="muted" style="margin-top:6px">Addons:</div>
-                <ul style="margin:6px 0 0 16px">
+              <div style="margin-top:.75rem;color:#64748b;font-size:.85rem">
+                <div style="font-weight:700;color:#334155;margin-bottom:.35rem">Addons</div>
+                <ul style="margin-left:1rem">
                   {% for a in addons %}
-                    <li>{{ a.addon_name }} — {{ '%.2f'|format(a.price) }}</li>
+                  <li>{{ a.addon_name }} — ${{ "{:,.2f}".format(a.price) }}</li>
                   {% endfor %}
                 </ul>
+              </div>
               {% endif %}
             </div>
+          </div>
           {% endfor %}
+        </div>
         {% endif %}
-      </div>
+      </section>
     </main>
   </body>
 </html>
