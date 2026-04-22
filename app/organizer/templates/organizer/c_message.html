@@ -10,7 +10,7 @@
     />
   </head>
   <body>
-    <nav class="sidebar">
+    {% comment %} <nav class="sidebar">
       <h2>EventSphere</h2>
       <p class="role-badge">Organizer</p>
       <ul>
@@ -18,7 +18,7 @@
         <li><a href="{{ url_for('creategig') }}">Create Gig</a></li>
         <li><a href="{{ url_for('message') }}" class="active">Messages</a></li>
       </ul>
-    </nav>
+    </nav> {% endcomment %}
 
     <main class="chat-container">
       <aside class="chat-sidebar">
@@ -103,7 +103,7 @@
           "<p style='text-align:center; color:gray;'>Loading messages...</p>";
 
         try {
-          const response = await fetch(`/organizer/messages/${roomId}`);
+          const response = await fetch(`/customer/messages/${roomId}`);
 
           // Catch authentication or server errors before parsing JSON
           if (!response.ok) {
@@ -151,7 +151,7 @@
         formData.append("text", text);
 
         try {
-          const response = await fetch("/organizer/message", {
+          const response = await fetch("/customer/message", {
             method: "POST",
             body: formData,
           });

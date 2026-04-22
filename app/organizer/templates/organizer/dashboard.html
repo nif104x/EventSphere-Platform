@@ -81,7 +81,7 @@
 
                 <td>{{ item.event_name }}</td>
 
-                <td>${{ "{:,.2f}".format(item.total_price) }}</td>
+                <td>${{ "{:,.2f}".format(item.final_total_price or 0.0) }}</td>
 
                 <td>
                   <div class="action-buttons">

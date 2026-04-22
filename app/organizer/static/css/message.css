@@ -1,6 +1,7 @@
 /* Reusing Base & Sidebar */
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
 body { display: flex; background-color: #f4f6f9; height: 100vh; overflow: hidden; }
+.role-badge { background: #3b82f6; color: white; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1.5rem; display: inline-block; font-weight: bold; }
 .sidebar { width: 250px; background-color: #1e293b; color: white; padding: 2rem; display: flex; flex-direction: column; }
 .sidebar h2 { margin-bottom: 2rem; }
 .sidebar ul { list-style: none; }

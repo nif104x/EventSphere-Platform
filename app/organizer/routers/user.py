@@ -220,15 +220,37 @@ def user_registration(data:schemas.OrganizerRegisterSchema, db : Session=Depends
 def login_page(request: Request):
     return templates.TemplateResponse(request,"organizer/login.html", {"request": request})
 
+# @router.post("/login", name="login_post")
+# def login(request:Request, username:str=Form(...), password: str = Form(...), db: Session=Depends(database.get_db)):
+#     user_credentials = schemas.userLoginSchema(username=username, password=password)
+#     auth_data = auth.login(user_credentials=user_credentials, db=db)
+
+#     token = auth_data["access_token"]
+
+#     redirect = RedirectResponse(url= request.url_for("dashboard"), status_code=status.HTTP_303_SEE_OTHER)
+#     redirect.set_cookie(key="access_token", value=f"Bearer {token}", httponly=True, path="/")
+
+#     return redirect
+
+from datetime import timedelta
+
 @router.post("/login", name="login_post")
 def login(request:Request, username:str=Form(...), password: str = Form(...), db: Session=Depends(database.get_db)):
-    user_credentials = schemas.userLoginSchema(username=username, password=password)
-    auth_data = auth.login(user_credentials=user_credentials, db=db)
+    
+    user = db.query(models.UserMain).filter(models.UserMain.username==username).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invalid credential")
+    
+    if user.password != password:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invalid credential")
 
-    token = auth_data["access_token"]
+    access_token = ouath2.create_access_token(
+        data = {"user_id": user.id},
+        expires_delta=timedelta(minutes=ouath2.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
 
     redirect = RedirectResponse(url= request.url_for("dashboard"), status_code=status.HTTP_303_SEE_OTHER)
-    redirect.set_cookie(key="access_token", value=f"Bearer {token}", httponly=True, path="/")
+    redirect.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True, path="/")
 
     return redirect
     
@@ -238,3 +260,6 @@ def login(request:Request, username:str=Form(...), password: str = Form(...), db
 
 
 
+@router.get("/chatbot", response_class=HTMLResponse)
+def chatbot(request:Request):
+        return templates.TemplateResponse(request,"organizer/chatbot.html", {"request": request})
