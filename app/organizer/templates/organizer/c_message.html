@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Messages | EventSphere</title>
+    <link
+      href="{{ url_for('static', path='css/message.css') }}"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    {% comment %} <nav class="sidebar">
+      <h2>EventSphere</h2>
+      <p class="role-badge">Organizer</p>
+      <ul>
+        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('creategig') }}">Create Gig</a></li>
+        <li><a href="{{ url_for('message') }}" class="active">Messages</a></li>
+      </ul>
+    </nav> {% endcomment %}
+
+    <main class="chat-container">
+      <aside class="chat-sidebar">
+        <div class="chat-header">
+          <h3>Active Inquiries</h3>
+        </div>
+        <div class="contact-list">
+          {% for room in rooms %}
+          <div
+            class="contact {% if loop.first %}active{% endif %}"
+            onclick="loadChat('{{ room.id }}', '{{ room.customer_id }}', this)"
+          >
+            <h4>Customer: {{ room.customer_id }}</h4>
+            <p>Event ID: {{ room.event_id }}</p>
+            <span class="time">Active</span>
+          </div>
+          {% endfor %}
+        </div>
+      </aside>
+
+      <section class="chat-window">
+        <div class="chat-header">
+          {% if rooms %}
+          <h3>
+            {{ rooms[0].customer_id }} <span>(Room: {{ rooms[0].id }})</span>
+          </h3>
+          {% else %}
+          <h3>No Active Chats</h3>
+          {% endif %}
+        </div>
+
+        <div class="messages-area" id="msgArea"></div>
+
+        <div
+          class="chat-input-area"
+          {%
+          if
+          not
+          rooms
+          %}style="display: none;"
+          {%
+          endif
+          %}
+        >
+          <input type="text" id="msgInput" placeholder="Type a message..." />
+          <button class="btn-send" onclick="sendMessage()">Send</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // Global variable so your sendMessage() function knows where to send new texts
+      let activeRoomId = null;
+
+      async function loadChat(roomId, customerName, clickedElement) {
+        // 1. Update global variable
+        activeRoomId = roomId;
+
+        // 2. Update Sidebar Styling (Move the dark gray 'active' highlight)
+        document
+          .querySelectorAll(".contact")
+          .forEach((el) => el.classList.remove("active"));
+        if (clickedElement) {
+          clickedElement.classList.add("active");
+        }
+
+        // 3. Update Chat Header
+        const headerH3 = document.querySelector(".chat-window .chat-header h3");
+        if (headerH3) {
+          headerH3.innerHTML = `${customerName} <span>(Room: ${roomId})</span>`;
+        }
+
+        // 4. Show the text input area now that a room is selected
+        const inputArea = document.querySelector(".chat-input-area");
+        if (inputArea) {
+          inputArea.style.display = "flex"; // or 'block' depending on your CSS
+        }
+
+        // 5. Fetch the chat history from FastAPI
+        const area = document.getElementById("msgArea");
+        area.innerHTML =
+          "<p style='text-align:center; color:gray;'>Loading messages...</p>";
+
+        try {
+          const response = await fetch(`/customer/messages/${roomId}`);
+
+          // Catch authentication or server errors before parsing JSON
+          if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          area.innerHTML = ""; // Clear the loading text
+
+          // 6. Draw the messages
+          if (!data.messages || data.messages.length === 0) {
+            area.innerHTML =
+              "<p style='text-align:center; color:gray;'>No messages yet. Say hi!</p>";
+          } else {
+            data.messages.forEach((msg) => {
+              const msgDiv = document.createElement("div");
+              msgDiv.className = msg.is_mine
+                ? "message sent"
+                : "message received";
+              msgDiv.innerHTML = `<p>${msg.text}</p><span class="timestamp">${msg.time}</span>`;
+              area.appendChild(msgDiv);
+            });
+          }
+
+          // Scroll to the bottom
+          area.scrollTop = area.scrollHeight;
+        } catch (error) {
+          console.error("Error loading chat:", error);
+          area.innerHTML = `<p style='color:red; text-align:center;'>Failed to load messages. (${error.message})</p>`;
+        }
+      }
+
+      // The background POST request for sending a new message
+      async function sendMessage() {
+        const input = document.getElementById("msgInput");
+        const area = document.getElementById("msgArea");
+        const text = input.value.trim();
+
+        if (text === "" || !activeRoomId) return; // Prevent sending empty messages
+
+        // Pack the data for FastAPI
+        const formData = new FormData();
+        formData.append("room_id", activeRoomId);
+        formData.append("text", text);
+
+        try {
+          const response = await fetch("/customer/message", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (response.ok) {
+            // Draw the new bubble immediately
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message sent";
+
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            msgDiv.innerHTML = `<p>${text}</p><span class="timestamp">${timeString}</span>`;
+
+            area.appendChild(msgDiv);
+            input.value = "";
+            area.scrollTop = area.scrollHeight;
+          } else {
+            alert(`Failed to send message. HTTP Status: ${response.status}`);
+          }
+        } catch (error) {
+          console.error("Error:", error);
+        }
+      }
+
+      // Send on Enter key
+      document
+        .getElementById("msgInput")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") sendMessage();
+        });
+
+      // Auto-click the first contact when the page loads, or hide input if no contacts
+      window.onload = () => {
+        const firstContact = document.querySelector(".contact");
+        const inputArea = document.querySelector(".chat-input-area");
+
+        if (firstContact) {
+          firstContact.click();
+        } else if (inputArea) {
+          // Hide the send text area if there's no chat window yet
+          inputArea.style.display = "none";
+        }
+      };
+    </script>
+  </body>
+</html>

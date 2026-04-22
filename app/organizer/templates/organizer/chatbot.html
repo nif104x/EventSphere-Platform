@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EventSphere AI Assistant</title>
+    <link
+      href="{{ url_for('static', path='css/chatbot.css') }}"
+      rel="stylesheet"
+    />
+</head>
+<body>
+
+    <div class="chat-container">
+        
+        <div class="chat-window" style="width: 100%;">
+            <div class="chat-header">
+                <h3>EventSphere AI Assistant <span>(Always Online)</span></h3>
+            </div>
+            
+            <div class="chat-messages" id="msgArea">
+                <div class="message received">
+                    <p>Hello! I am the EventSphere AI Assistant. How can I help you plan your event today?</p>
+                    <span class="timestamp">Just now</span>
+                </div>
+            </div>
+
+            <div class="chat-input-area" style="display: flex;">
+                <input type="text" id="msgInput" placeholder="Ask me anything about events, pricing, or ideas...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+
+            if (text === '') return;
+
+            // 1. Draw the user's message instantly (Blue bubble)
+            appendMessage(text, 'sent');
+            input.value = ''; // clear input box
+            
+            // 2. Prepare data to send to your FastAPI Chatbot endpoint
+            const formData = new FormData();
+            formData.append("query_text", text);
+
+            try {
+                // Update this URL to point to your actual FastAPI AI route
+                const response = await fetch('/chatbot/ask', { 
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // 3. Draw the AI's response (Gray bubble)
+                    appendMessage(data.reply, 'received');
+                } else {
+                    appendMessage("Sorry, I am having trouble connecting to my database right now.", 'received');
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                appendMessage("Network error. Please try again.", 'received');
+            }
+        }
+
+        // Helper function to keep the drawing logic clean
+        function appendMessage(text, type) {
+            const area = document.getElementById('msgArea');
+            const msgDiv = document.createElement('div');
+            
+            // 'type' will be either 'sent' (blue) or 'received' (gray)
+            msgDiv.className = `message ${type}`;
+            
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            msgDiv.innerHTML = `<p>${text}</p><span class="timestamp">${timeString}</span>`;
+            
+            area.appendChild(msgDiv);
+            
+            // Auto-scroll to bottom
+            area.scrollTop = area.scrollHeight;
+        }
+
+        // Trigger send on Enter key
+        document.getElementById('msgInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

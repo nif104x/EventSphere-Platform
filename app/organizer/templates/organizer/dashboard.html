@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard | EventSphere Organizer</title>
+    <link
+      href="{{ url_for('static', path='css/dashboard.css') }}"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <nav class="sidebar">
+      <h2>EventSphere</h2>
+      <p class="role-badge">Organizer</p>
+      <ul>
+        <li>
+          <a href="{{ url_for('dashboard') }}" class="active">Dashboard</a>
+        </li>
+        <li><a href="{{ url_for('creategig') }}">Create Gig</a></li>
+        <li><a href="{{ url_for('message') }}">Messages</a></li>
+      </ul>
+    </nav>
+
+    <main class="main-content">
+      <header>
+        <h1>Welcome back, {{user.company_name}}</h1>
+        <button
+          class="btn-primary"
+          onclick="window.location.href='{{ url_for('creategig') }}'"
+        >
+          + New Service
+        </button>
+      </header>
+
+      <section class="stats-grid">
+        <div class="stat-card">
+          <h3>Total Earnings</h3>
+          <p class="stat-value">
+            ${{ analytics.total_earnings | default(0.0) }}
+          </p>
+        </div>
+        <div class="stat-card">
+          <h3>Completed Events</h3>
+          <p class="stat-value">{{analytics.total_events | default(0)}}</p>
+        </div>
+        <div class="stat-card">
+          <h3>Average Rating</h3>
+          <p class="stat-value">{{rating}} <span>★</span></p>
+        </div>
+      </section>
+
+      <section class="dashboard-section">
+        <div class="section-header">
+          <h2>Action Required: Pending Orders</h2>
+          <span class="badge warning">{{ pending|length }} Pending</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Event Date</th>
+                <th>Service Requested</th>
+                <th>Total Price</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in pending %}
+              <tr>
+                <td>{{ item.id }}</td>
+
+                <td>{{ item.customer_name }}</td>
+
+                <td>
+                  {{ item.created_at.strftime('%b %d, %Y') if item.created_at
+                  else "N/A" }}
+                </td>
+
+                <td>{{ item.event_name }}</td>
+
+                <td>${{ "{:,.2f}".format(item.final_total_price or 0.0) }}</td>
+
+                <td>
+                  <div class="action-buttons">
+                    <button
+                      class="btn-sm success"
+                      onclick="updateStatus('{{ item.id }}', 'confirmed')"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      class="btn-sm danger"
+                      onclick="updateStatus('{{ item.id }}', 'declined')"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="grid-2-col">
+        <section class="dashboard-section">
+          <h2>Your Active Gigs</h2>
+          <div class="gigs-grid">
+            {% if gigs|length<1 %}
+            <h4># No active Services</h4>
+            {% endif %} {% for gig in gigs %}
+            <div class="gig-card">
+              {% if gig.images and gig.images|length > 0 %}
+              <img src="{{ gig.images[0].image_url }}" alt="{{ gig.title }}" />
+              {% else %}
+              <img
+                src="/static/images/default-gig.jpg"
+                alt="No image available"
+              />
+              {% endif %}
+
+              <div class="gig-info">
+                <span class="category">{{ gig.primary_category }}</span>
+
+                <h4>{{ gig.title }}</h4>
+
+                <p class="price">
+                  From ${{ "{:,.2f}".format(gig.base_price) }}
+                </p>
+
+                {% if gig.is_active %}
+                <span class="status-dot active"></span> Live {% else %}
+                <span class="status-dot inactive"></span> Paused {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="dashboard-section">
+          <h2>Recent Reviews</h2>
+          <div class="reviews-list">
+            <div class="review-card">
+              <div class="review-header">
+                <span class="stars">★★★★★</span>
+                <span class="date">May 12, 2026</span>
+              </div>
+              <p class="comment">
+                "Incredible floral arrangements, completely transformed the
+                venue! Highly recommend Awesome Events."
+              </p>
+              <p class="reviewer">- Jessica W. (EVT-8832)</p>
+            </div>
+            <div class="review-card">
+              <div class="review-header">
+                <span class="stars">★★★★☆</span>
+                <span class="date">Apr 28, 2026</span>
+              </div>
+              <p class="comment">
+                "Sound system was crystal clear. Setup was a bit delayed but
+                overall great service."
+              </p>
+              <p class="reviewer">- David L. (EVT-8710)</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="dashboard-section">
+        <h2>Completed Event History</h2>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event ID</th>
+                <th>Date Completed</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Net Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in completed %}
+              <tr>
+                <td>{{ item.id }}</td>
+
+                <td>
+                  {{ item.event_date.strftime('%b %d, %Y') if item.event_date
+                  else "N/A" }}
+                </td>
+
+                <td>{{ item.customer_id }}</td>
+
+                <td>
+                  <span class="status completed">{{ item.status.value }}</span>
+                </td>
+
+                <td>
+                  {% if item.order %} ${{
+                  "{:,.2f}".format(item.order.final_total_price) }} {% else %}
+                  $0.00 {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
