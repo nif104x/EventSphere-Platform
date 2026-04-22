@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -5,6 +7,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.customer.database import get_db
+from app.organizer import ouath2
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -56,6 +59,48 @@ class RatingCreate(BaseModel):
 class OrganizerEventRespond(BaseModel):
     org_id: str
     action: str  # "confirm" | "decline"
+
+
+class CustomerLoginIn(BaseModel):
+    username: str
+    password: str
+
+
+@router.post("/customer/login")
+def customer_login(body: CustomerLoginIn, db: Session = Depends(get_db)):
+    """Same credential rules as organizer Jinja login: user_main row + plaintext password + Customer role."""
+    row = db.execute(
+        text(
+            """
+        SELECT u.id AS id, u.password AS password, u.role::text AS role, c.full_name AS full_name
+        FROM user_main u
+        INNER JOIN customer_info c ON c.customer_id = u.id
+        WHERE u.username = :username
+        LIMIT 1
+        """
+        ),
+        {"username": body.username.strip()},
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Invalid credential")
+    m = dict(row._mapping)
+    if m.get("password") != body.password:
+        raise HTTPException(status_code=404, detail="Invalid credential")
+    role = (m.get("role") or "").strip()
+    if role != "Customer" and not role.endswith(".Customer"):
+        raise HTTPException(status_code=403, detail="Not a customer account")
+
+    access_token = ouath2.create_access_token(
+        data={"user_id": m["id"]},
+        expires_delta=timedelta(minutes=ouath2.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {
+        "customer_id": m["id"],
+        "full_name": m["full_name"],
+        "username": body.username.strip(),
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
 
 
 @router.get("/organizers")

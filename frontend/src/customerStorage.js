@@ -1,19 +1,38 @@
-const CUSTOMER_KEY = 'eventsphere_customer_id';
+const SESSION_KEY = 'eventsphere_customer_session';
 const ORG_KEY = 'eventsphere_organizer_org_id';
 
-const CUSTOMERS = [
-  { id: 'CUST-01', label: 'Alice Smith (CUST-01)' },
-  { id: 'CUST-02', label: 'Bob Jones (CUST-02)' },
-  { id: 'CUST-03', label: 'Charlie Brown (CUST-03)' },
-];
-
-export function getCustomerId() {
-  if (typeof localStorage === 'undefined') return 'CUST-01';
-  return localStorage.getItem(CUSTOMER_KEY) || 'CUST-01';
+/** @returns {{ customer_id: string, full_name: string, username: string, access_token: string } | null} */
+export function getCustomerSession() {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data?.customer_id) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
-export function setCustomerId(id) {
-  localStorage.setItem(CUSTOMER_KEY, id);
+export function setCustomerSession({ customer_id, full_name, username, access_token }) {
+  localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({ customer_id, full_name, username, access_token })
+  );
+}
+
+export function clearCustomerSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+export function getCustomerId() {
+  const s = getCustomerSession();
+  return s?.customer_id ?? null;
+}
+
+export function getCustomerAccessToken() {
+  return getCustomerSession()?.access_token ?? null;
 }
 
 export function getOrganizerOrgId() {
@@ -24,5 +43,3 @@ export function getOrganizerOrgId() {
 export function setOrganizerOrgId(id) {
   localStorage.setItem(ORG_KEY, id);
 }
-
-export { CUSTOMERS };

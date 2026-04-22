@@ -1,0 +1,136 @@
+/* Customer login — aligned with organizer Jinja login card */
+
+.es-cust-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: #f8fafc;
+  color: #334155;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.es-cust-login__card {
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  padding: 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+}
+
+.es-cust-login__brand {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.es-cust-login__brand h1 {
+  color: #0f172a;
+  font-size: 1.8rem;
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+}
+
+.es-cust-login__badge {
+  background: #3b82f6;
+  color: #fff;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: inline-block;
+  margin-bottom: 1rem;
+}
+
+.es-cust-login__brand p {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.es-cust-login__error {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.es-cust-login__field {
+  margin-bottom: 1.5rem;
+}
+
+.es-cust-login__field label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.es-cust-login__field input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.es-cust-login__field input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.es-cust-login__submit {
+  width: 100%;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  padding: 0.85rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.es-cust-login__submit:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.es-cust-login__submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.es-cust-login__footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.es-cust-login__footer a {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.es-cust-login__footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .es-cust-login__card {
+    padding: 2rem 1.5rem;
+  }
+}

@@ -153,17 +153,17 @@ const BookingPage = () => {
     return (
       <div className="page-wrap org-page es-page es-page--book es-page--book-empty">
         <nav className="es-book-crumb" aria-label="Breadcrumb">
-          <Link to="/">Home</Link>
+          <Link to="/customer">Customer</Link>
           <span className="es-book-crumb__sep">/</span>
           <span>Book</span>
         </nav>
         <h1 className="es-page-title">Book</h1>
         <div className="es-book-empty-panel">
           <p className="muted es-book-empty-panel__lead">
-            No organizers selected. Start from Home and choose vendors to book.
+            No organizers selected. Start from the customer home and choose vendors to book.
           </p>
-          <button type="button" className="btn primary" onClick={() => navigate('/')}>
-            Back to home
+          <button type="button" className="btn primary" onClick={() => navigate('/customer')}>
+            Back to customer home
           </button>
         </div>
       </div>
@@ -182,7 +182,7 @@ const BookingPage = () => {
       <div className="es-book-layout">
         <div className="es-book-main">
           <nav className="es-book-crumb" aria-label="Breadcrumb">
-            <Link to="/">Home</Link>
+            <Link to="/customer">Customer</Link>
             <span className="es-book-crumb__sep">/</span>
             <span>Checkout</span>
           </nav>

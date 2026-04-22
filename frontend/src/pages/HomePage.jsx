@@ -49,7 +49,7 @@ const HomePage = () => {
     <div className="page-wrap org-page es-page es-page--home">
       <div className="es-home-top">
         <header className="page-header es-home-hero">
-          <span className="es-home-hero__eyebrow">Step 1 · Marketplace</span>
+          <span className="es-home-hero__eyebrow">Step 1 · Customer</span>
           <h1 className="es-page-title">Choose your organizers</h1>
           <p className="muted es-home-hero__desc">
             Select one or more vendors, then continue to pick services, add-ons, and your event date.

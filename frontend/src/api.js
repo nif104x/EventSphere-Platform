@@ -10,6 +10,8 @@ const api = axios.create({
   baseURL: API_BASE,
 });
 
+export const loginCustomer = (body) => api.post('/customer/login', body);
+
 export const getOrganizers = () => api.get('/organizers');
 export const getServices = (orgId) => api.get(`/services/${orgId}`);
 export const getAddons = (listingId) => api.get(`/addons/${listingId}`);
