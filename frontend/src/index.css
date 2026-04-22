@@ -1,4 +1,4 @@
-/* EventSphere — customer views; shared tokens with organizer.css (loaded after) */
+/* EventSphere — global base; shell tokens come from organizer.css (loaded in main.jsx) */
 
 :root {
   color-scheme: light;

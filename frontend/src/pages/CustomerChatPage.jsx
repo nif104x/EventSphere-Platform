@@ -107,7 +107,7 @@ export default function CustomerChatPage() {
       <header className="page-header">
         <h1 className="es-page-title">Messages</h1>
         <p className="muted es-chat__hint">
-          Chat with organizers for your bookings. Organizers use the same threads in their portal.
+          Message vendors you have booked with. Each booking has its own conversation thread.
         </p>
       </header>
 
@@ -122,8 +122,8 @@ export default function CustomerChatPage() {
               <div className="es-chat__empty">
                 <p>No conversations yet.</p>
                 <p className="es-chat__hint">
-                  After you book an event, open a chat from <Link to="/dashboard">your dashboard</Link> or return
-                  here — each event has one thread with that organizer.
+                  After you book, start a thread from <Link to="/dashboard">your dashboard</Link>. Each event keeps
+                  one conversation with that vendor.
                 </p>
               </div>
             ) : (
@@ -154,7 +154,7 @@ export default function CustomerChatPage() {
             ) : (
               <>
                 <div className="es-chat__main-head">
-                  <h2>{activeRoom?.company_name ?? 'Organizer'}</h2>
+                  <h2>{activeRoom?.company_name ?? 'Vendor'}</h2>
                   <p>
                     Event <strong>{activeRoom?.event_id}</strong> · Room <code>{activeRoomId}</code>
                   </p>
@@ -162,7 +162,7 @@ export default function CustomerChatPage() {
                 <div className="es-chat__stream" role="log" aria-live="polite">
                   {messages.length === 0 ? (
                     <p className="es-chat__empty" style={{ margin: 'auto' }}>
-                      No messages yet. Say hello to your organizer.
+                      No messages yet. Say hello to your vendor.
                     </p>
                   ) : (
                     messages.map((m) => (

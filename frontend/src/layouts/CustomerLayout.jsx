@@ -1,5 +1,4 @@
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { getBackendOrigin } from '../backendOrigin';
 import { getCustomerSession, clearCustomerSession } from '../customerStorage';
 
 const linkClass = ({ isActive }) =>
@@ -15,7 +14,7 @@ export default function CustomerLayout() {
   };
 
   return (
-    <div className="org-shell">
+    <div className="org-shell org-shell--customer">
       <aside className="org-sidebar" aria-label="Customer navigation">
         <div className="org-sidebar__brand">EventSphere</div>
         <div className="org-sidebar__badge">Customer</div>
@@ -46,13 +45,6 @@ export default function CustomerLayout() {
           <Link to="/" className="org-sidebar__foot-link">
             ← Portal hub
           </Link>
-          <a
-            href={`${getBackendOrigin()}/organizer/login`}
-            className="org-sidebar__foot-link"
-            rel="noopener noreferrer"
-          >
-            Organizer (Jinja) ↗
-          </a>
         </div>
       </aside>
       <div className="org-main">

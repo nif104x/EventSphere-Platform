@@ -143,12 +143,12 @@ const DashboardPage = () => {
                       to={`/customer/chat?eventId=${encodeURIComponent(event.id)}`}
                       className="btn small"
                     >
-                      Message organizer
+                      Message vendor
                     </Link>
                   </div>
                   {(event.can_rate === true || event.can_rate === 'true') && (
                     <button type="button" className="btn primary small" onClick={() => openRate(event)}>
-                      Rate organizer
+                      Rate vendor
                     </button>
                   )}
                 </li>

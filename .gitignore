@@ -1,13 +1,9 @@
 venv/
-<<<<<<< HEAD
 .venv/
 env/
 __pycache__/
 *.pyc
 *.pyo
 .env
+**/.env
 .vscode/
-=======
-__pycache__/
-.env
->>>>>>> nif

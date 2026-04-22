@@ -1,4 +1,4 @@
-/* Customer ↔ organizer chat (aligned with organizer shell spacing) */
+/* Customer messaging — layout aligned with portal shell spacing */
 .es-chat {
   display: flex;
   flex-direction: column;
