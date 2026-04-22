@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
+import { getBackendOrigin } from '../backendOrigin';
 
 const linkClass = ({ isActive }) =>
   `org-sidebar__link${isActive ? ' org-sidebar__link--active' : ''}`;
@@ -21,9 +22,19 @@ export default function OrganizerLayout() {
           </NavLink>
         </nav>
         <div className="org-sidebar__foot">
-          <Link to="/" className="org-sidebar__foot-link">
-            ← Customer site
+          <Link to="/customer" className="org-sidebar__foot-link">
+            ← Customer app
           </Link>
+          <Link to="/" className="org-sidebar__foot-link">
+            Portal hub
+          </Link>
+          <a
+            href={`${getBackendOrigin()}/organizer/login`}
+            className="org-sidebar__foot-link"
+            rel="noopener noreferrer"
+          >
+            Organizer (Jinja) ↗
+          </a>
         </div>
       </aside>
       <div className="org-main">

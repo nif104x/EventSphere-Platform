@@ -145,6 +145,30 @@
   color: var(--org-sidebar-text);
 }
 
+.org-sidebar__account-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.org-sidebar__foot-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.org-sidebar__foot-btn.org-sidebar__foot-link:hover {
+  color: #e2e8f0;
+}
+
 .org-sidebar__select {
   width: 100%;
   font-family: inherit;

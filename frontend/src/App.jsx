@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import LandingPage from './pages/LandingPage';
+import CustomerLoginPage from './pages/CustomerLoginPage';
 import HomePage from './pages/HomePage';
 import BookingPage from './pages/BookingPage';
 import DashboardPage from './pages/DashboardPage';
@@ -6,14 +8,19 @@ import OrganizerDashboardPage from './pages/OrganizerDashboardPage';
 import OrganizerPlaceholderPage from './pages/OrganizerPlaceholderPage';
 import OrganizerLayout from './layouts/OrganizerLayout';
 import CustomerLayout from './layouts/CustomerLayout';
+import CustomerProtectedLayout from './layouts/CustomerProtectedLayout';
 
 function AppShell() {
   return (
     <Routes>
-      <Route element={<CustomerLayout />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/book" element={<BookingPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/customer/login" element={<CustomerLoginPage />} />
+      <Route element={<CustomerProtectedLayout />}>
+        <Route element={<CustomerLayout />}>
+          <Route path="/customer" element={<HomePage />} />
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+        </Route>
       </Route>
       <Route path="/organizer" element={<OrganizerLayout />}>
         <Route index element={<OrganizerDashboardPage />} />
