@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { getDashboard, submitRating } from '../api';
-import { getCustomerId } from '../customerStorage';
+import { Link, useNavigate } from 'react-router-dom';
+import { getDashboard, submitRating, markEventComplete } from '../api';
+import { clearCustomerSession, getCustomerId } from '../customerStorage';
+import { canMarkEventComplete, truthyApiFlag, isConfirmedEventStatus } from '../eventUi';
 
 const formatDate = (d) => {
   if (d == null) return '';
@@ -10,6 +11,7 @@ const formatDate = (d) => {
 };
 
 const DashboardPage = () => {
+  const navigate = useNavigate();
   const customerId = getCustomerId();
   const [data, setData] = useState({ events: [], orders: [] });
   const [loading, setLoading] = useState(true);
@@ -18,6 +20,7 @@ const DashboardPage = () => {
   const [stars, setStars] = useState(5);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
+  const [completingId, setCompletingId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +37,12 @@ const DashboardPage = () => {
       .catch((err) => {
         console.error(err);
         if (!cancelled) {
+          const st = err.response?.status;
+          if (st === 401 || st === 403) {
+            clearCustomerSession();
+            navigate('/customer/login', { replace: true });
+            return;
+          }
           setError('Could not load dashboard. Is the API running?');
           setLoading(false);
         }
@@ -41,12 +50,32 @@ const DashboardPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [customerId]);
+  }, [customerId, navigate]);
 
   const openRate = (event) => {
     setRatingFor(event);
     setStars(5);
     setComment('');
+  };
+
+  const markComplete = async (eventId) => {
+    setCompletingId(eventId);
+    try {
+      await markEventComplete(eventId);
+      const res = await getDashboard(customerId);
+      setData(res.data);
+    } catch (e) {
+      console.error(e);
+      const st = e.response?.status;
+      if (st === 401 || st === 403) {
+        clearCustomerSession();
+        navigate('/customer/login', { replace: true });
+        return;
+      }
+      const msg = e.response?.data?.detail || e.message || 'Could not mark event complete';
+      alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    setCompletingId(null);
   };
 
   const submitRate = async () => {
@@ -77,17 +106,34 @@ const DashboardPage = () => {
 
   const eventCount = data.events.length;
   const orderCount = data.orders.length;
-  const rateableCount = data.events.filter(
-    (e) => e.can_rate === true || e.can_rate === 'true'
-  ).length;
+  const rateableCount = data.events.filter((e) => truthyApiFlag(e.can_rate)).length;
+  const markableCount = data.events.filter((e) => canMarkEventComplete(e)).length;
 
   return (
     <div className="page-wrap org-page dashboard-page es-page es-page--dashboard">
-      <header className="page-header">
-        <h1 className="es-page-title">My dashboard</h1>
-        <p className="muted">Viewing data for customer ID: {customerId}</p>
+      <header className="page-header es-dash-header">
+        <div>
+          <h1 className="es-page-title">My dashboard</h1>
+          <p className="muted">
+            The vendor <strong>confirms</strong> your booking. <strong>You</strong> tap{' '}
+            <strong>Mark event complete</strong> when the service is finished — only after that can{' '}
+            <strong>you</strong> use <strong>Rate vendor</strong>. Full archive:{' '}
+            <Link to="/customer/history">Events & ratings</Link>.
+          </p>
+        </div>
+        <Link to="/customer/history" className="btn small">
+          Full history
+        </Link>
       </header>
       {error && <p className="error-banner">{error}</p>}
+
+      {markableCount > 0 && (
+        <p className="es-dash-callout" role="status">
+          You have <strong>{markableCount}</strong> confirmed event{markableCount === 1 ? '' : 's'} — use{' '}
+          <strong>Mark event complete</strong> under <strong>My events</strong> when the service is done, then you can
+          rate the vendor.
+        </p>
+      )}
 
       <div className="es-dash-kpis" aria-label="Summary">
         <div className="es-dash-kpi">
@@ -97,6 +143,10 @@ const DashboardPage = () => {
         <div className="es-dash-kpi">
           <div className="es-dash-kpi__label">Orders</div>
           <div className="es-dash-kpi__value">{orderCount}</div>
+        </div>
+        <div className="es-dash-kpi">
+          <div className="es-dash-kpi__label">Mark complete</div>
+          <div className="es-dash-kpi__value">{markableCount}</div>
         </div>
         <div className="es-dash-kpi es-dash-kpi--accent">
           <div className="es-dash-kpi__label">Ready to rate</div>
@@ -125,6 +175,12 @@ const DashboardPage = () => {
 
         <section className="dash-panel es-dash-events">
           <h2>My events</h2>
+          {data.events.length > 0 && markableCount === 0 && (
+            <p className="muted es-dash-events__hint">
+              <strong>Mark event complete</strong> appears when status is <strong>Confirmed</strong> (after the
+              vendor accepts your booking). Pending = still waiting on the vendor.
+            </p>
+          )}
           {data.events.length === 0 ? (
             <p className="empty-state empty-state--tight">No events yet.</p>
           ) : (
@@ -134,11 +190,24 @@ const DashboardPage = () => {
                   <div>
                     <strong>{event.company_name}</strong> — {formatDate(event.event_date)} —{' '}
                     <span className="status-pill">{String(event.status)}</span>
+                    {isConfirmedEventStatus(event.status) && (
+                      <span className="muted"> · You can mark this complete when the service is finished.</span>
+                    )}
                     {event.my_rating != null && (
                       <span className="muted"> · Your rating: ★ {Number(event.my_rating)}</span>
                     )}
                   </div>
                   <div className="dash-row__actions">
+                    {canMarkEventComplete(event) && (
+                      <button
+                        type="button"
+                        className="btn primary small"
+                        disabled={completingId === event.id}
+                        onClick={() => markComplete(event.id)}
+                      >
+                        {completingId === event.id ? 'Updating…' : 'Mark event complete'}
+                      </button>
+                    )}
                     <Link
                       to={`/customer/chat?eventId=${encodeURIComponent(event.id)}`}
                       className="btn small"
@@ -146,7 +215,7 @@ const DashboardPage = () => {
                       Message vendor
                     </Link>
                   </div>
-                  {(event.can_rate === true || event.can_rate === 'true') && (
+                  {truthyApiFlag(event.can_rate) && (
                     <button type="button" className="btn primary small" onClick={() => openRate(event)}>
                       Rate vendor
                     </button>

@@ -1,14 +1,20 @@
+import json
+import os
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
+from urllib.parse import urlparse
 
 import jwt
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from app.customer.database import get_db
 from app.organizer import ouath2
@@ -16,6 +22,58 @@ from app.organizer import ouath2
 router = APIRouter(prefix="/api", tags=["api"])
 
 _bearer = HTTPBearer(auto_error=False)
+
+# Same .env locations as app/main.py so STRIPE_SECRET_KEY is visible to this module
+_APP_DIR = Path(__file__).resolve().parents[2]
+_PROJECT_ROOT = _APP_DIR.parent
+
+
+def _refresh_payment_env() -> None:
+    """Reload env files (uvicorn cwd may differ from where .env lives)."""
+    load_dotenv(_PROJECT_ROOT / ".env", override=False)
+    load_dotenv(_APP_DIR / ".env", override=True)
+
+
+def _normalize_stripe_secret_key() -> str:
+    """Read secret from env; strip quotes and all whitespace (fixes spaces after '=' or in pasted value)."""
+    _refresh_payment_env()
+    key = (os.getenv("STRIPE_SECRET_KEY") or os.getenv("STRIPE_SECRET_KEY_TEST") or "").strip()
+    if (key.startswith('"') and key.endswith('"')) or (key.startswith("'") and key.endswith("'")):
+        key = key[1:-1].strip()
+    key = "".join(key.split())
+    return key
+
+
+def _stripe_secret_key_format_error(key: str) -> Optional[str]:
+    """Detect common mistake: putting test card 4242… in .env instead of the API Secret key."""
+    if not key:
+        return None
+    if not key.startswith(("sk_test_", "sk_live_")):
+        return (
+            "STRIPE_SECRET_KEY must start with sk_test_ or sk_live_. "
+            "Copy the Secret key from Stripe Dashboard → Developers → API keys."
+        )
+    # Real Stripe secrets are long (~100+ chars). Card-shaped values are much shorter.
+    if len(key) < 80:
+        return (
+            "STRIPE_SECRET_KEY is not a valid Stripe secret (too short). "
+            "In https://dashboard.stripe.com/test/apikeys reveal and copy the full Secret key (sk_test_…). "
+            "Do not put 4242 4242 4242 4242 in .env — that is a test card number you type only on the Stripe checkout page."
+        )
+    return None
+
+
+def _require_stripe_secret_key() -> str:
+    key = _normalize_stripe_secret_key()
+    if not key:
+        raise HTTPException(
+            status_code=503,
+            detail="Add STRIPE_SECRET_KEY to app/.env (your Stripe Secret key) and restart the API.",
+        )
+    fmt = _stripe_secret_key_format_error(key)
+    if fmt:
+        raise HTTPException(status_code=503, detail=fmt)
+    return key
 
 
 def _fmt_msg_time(ts) -> str:
@@ -79,7 +137,12 @@ def get_current_customer_id(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not a customer session",
         )
-    return dict(row._mapping)["customer_id"]
+    cid = dict(row._mapping)["customer_id"]
+    return str(cid).strip()
+
+
+def _norm_uid(val: Optional[str]) -> str:
+    return str(val or "").strip().casefold()
 
 
 _ALLOWED_TABLES = frozenset({"events", "event_orders", "vendor_reviews"})
@@ -103,7 +166,8 @@ def _next_seq(db: Session, table: str, id_column: str, prefix: str) -> str:
 
 
 class EventCreate(BaseModel):
-    customer_id: str
+    """customer_id is optional; when sent it must match the JWT (legacy clients)."""
+    customer_id: Optional[str] = None
     org_id: str
     event_date: str  # YYYY-MM-DD
 
@@ -114,10 +178,6 @@ class OrderCreate(BaseModel):
     base_price: float
     addons_cost: float = 0.0
     total_price: float
-
-
-class EventCompleteBody(BaseModel):
-    org_id: str
 
 
 class RatingCreate(BaseModel):
@@ -162,7 +222,7 @@ def customer_login(body: CustomerLoginIn, db: Session = Depends(get_db)):
 
     access_token = ouath2.create_access_token(
         data={"user_id": m["id"]},
-        expires_delta=timedelta(minutes=ouath2.ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_delta=timedelta(minutes=ouath2.CUSTOMER_ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return {
         "customer_id": m["id"],
@@ -230,66 +290,526 @@ def get_addons(listing_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/events")
-def create_event(event: EventCreate, db: Session = Depends(get_db)):
+def create_event(
+    event: EventCreate,
+    db: Session = Depends(get_db),
+    authed_customer_id: str = Depends(get_current_customer_id),
+):
+    """Creates a row in shared Postgres `events` (same DB/URL as organizer). Organizers list it by `org_id`."""
+    body_cid = (event.customer_id or "").strip()
+    if body_cid and _norm_uid(body_cid) != _norm_uid(authed_customer_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="customer_id must match the signed-in customer",
+        )
     event_id = _next_seq(db, "events", "id", "EVT")
-    db.execute(
-        text(
-            """
-        INSERT INTO events (id, customer_id, org_id, event_date, status)
-        VALUES (:id, :customer_id, :org_id, :event_date, 'Pending')
-    """
-        ),
-        {
-            "id": event_id,
-            "customer_id": event.customer_id,
-            "org_id": event.org_id,
-            "event_date": event.event_date,
-        },
-    )
-    db.commit()
+    try:
+        db.execute(
+            text(
+                """
+            INSERT INTO events (id, customer_id, org_id, event_date, status)
+            VALUES (:id, :customer_id, :org_id, :event_date, 'Pending')
+        """
+            ),
+            {
+                "id": event_id,
+                "customer_id": authed_customer_id,
+                "org_id": event.org_id,
+                "event_date": event.event_date,
+            },
+        )
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not create the event. Check that the organizer and date are valid "
+                "and your account is linked in the database."
+            ),
+        ) from e
     return {"event_id": event_id}
 
 
 @router.post("/orders")
-def create_order(order: OrderCreate, db: Session = Depends(get_db)):
+def create_order(
+    order: OrderCreate,
+    db: Session = Depends(get_db),
+    authed_customer_id: str = Depends(get_current_customer_id),
+):
+    """Order is tied to `events.id`; organizer dashboards read the same `event_orders` rows."""
+    owner = db.execute(
+        text("SELECT customer_id FROM events WHERE id = :eid LIMIT 1"),
+        {"eid": order.event_id},
+    ).first()
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if _norm_uid(dict(owner._mapping).get("customer_id")) != _norm_uid(authed_customer_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot attach an order to another customer's event",
+        )
     order_id = _next_seq(db, "event_orders", "id", "ORD")
-    db.execute(
+    try:
+        db.execute(
+            text(
+                """
+            INSERT INTO event_orders (id, event_id, listing_id, base_price_at_booking, total_addons_cost, final_total_price, payment_status)
+            VALUES (:id, :event_id, :listing_id, :base_price, :addons_cost, :total_price, 'Unpaid')
+        """
+            ),
+            {
+                "id": order_id,
+                "event_id": order.event_id,
+                "listing_id": order.listing_id,
+                "base_price": order.base_price,
+                "addons_cost": order.addons_cost,
+                "total_price": order.total_price,
+            },
+        )
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not create the order. The selected service may not exist for this organizer, "
+                "or the event reference is invalid."
+            ),
+        ) from e
+    return {"order_id": order_id}
+
+
+def _payment_redirect_allowed(url: str) -> bool:
+    u = (url or "").strip()
+    if not u.startswith(("http://", "https://")):
+        return False
+    raw = os.getenv(
+        "PAYMENT_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    )
+    bases = [x.strip().rstrip("/") for x in raw.split(",") if x.strip()]
+    try:
+        origin = f"{urlparse(u).scheme}://{urlparse(u).netloc}".rstrip("/")
+    except Exception:
+        return False
+    for b in bases:
+        br = b.rstrip("/")
+        if origin == br or u.startswith(br + "/") or u.startswith(br + "?"):
+            return True
+    return False
+
+
+def _orders_owned_by_customer(db: Session, customer_id: str, order_ids: List[str]) -> List[dict]:
+    ids = sorted({str(x).strip() for x in order_ids if str(x).strip()})
+    if not ids:
+        raise HTTPException(status_code=400, detail="order_ids required")
+    ph = ", ".join(f":id{i}" for i in range(len(ids)))
+    params: dict = {f"id{i}": ids[i] for i in range(len(ids))}
+    rows = db.execute(
         text(
+            f"""
+            SELECT eo.id AS id, eo.final_total_price AS final_total_price,
+                   eo.payment_status::text AS payment_status, ev.customer_id AS customer_id
+            FROM event_orders eo
+            JOIN events ev ON ev.id = eo.event_id
+            WHERE eo.id IN ({ph})
             """
-        INSERT INTO event_orders (id, event_id, listing_id, base_price_at_booking, total_addons_cost, final_total_price, payment_status)
-        VALUES (:id, :event_id, :listing_id, :base_price, :addons_cost, :total_price, 'Unpaid')
-    """
         ),
-        {
-            "id": order_id,
-            "event_id": order.event_id,
-            "listing_id": order.listing_id,
-            "base_price": order.base_price,
-            "addons_cost": order.addons_cost,
-            "total_price": order.total_price,
-        },
+        params,
+    ).fetchall()
+    if len(rows) != len(ids):
+        raise HTTPException(status_code=404, detail="One or more orders were not found")
+    out: List[dict] = []
+    for r in rows:
+        m = dict(r._mapping)
+        if _norm_uid(m.get("customer_id")) != _norm_uid(customer_id):
+            raise HTTPException(
+                status_code=403,
+                detail="This order is not linked to your account.",
+            )
+        out.append(m)
+    return out
+
+
+def _assert_customer_orders_unpaid(
+    db: Session, customer_id: str, order_ids: List[str]
+) -> Tuple[List[dict], float]:
+    out = _orders_owned_by_customer(db, customer_id, order_ids)
+    total = 0.0
+    for m in out:
+        st = (m.get("payment_status") or "").strip().lower()
+        if st == "paid":
+            raise HTTPException(status_code=400, detail=f"Order {m['id']} is already paid")
+        total += float(m.get("final_total_price") or 0)
+    return out, total
+
+
+def _mark_orders_paid(db: Session, order_ids: List[str]) -> int:
+    ids = [str(x).strip() for x in order_ids if str(x).strip()]
+    if not ids:
+        return 0
+    ph = ", ".join(f":p{i}" for i in range(len(ids)))
+    params = {f"p{i}": ids[i] for i in range(len(ids))}
+    # Use plain 'Paid' so Postgres can assign to either enum or varchar column (no ::payment_status cast).
+    r = db.execute(
+        text(
+            f"""
+            UPDATE event_orders
+            SET payment_status = 'Paid'
+            WHERE id IN ({ph})
+              AND COALESCE(payment_status::text, '') NOT ILIKE 'paid'
+            """
+        ),
+        params,
     )
     db.commit()
-    return {"order_id": order_id}
+    rc = getattr(r, "rowcount", None)
+    return int(rc) if rc is not None and rc >= 0 else 0
+
+
+def _coerce_stripe_metadata_value(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v.strip()
+    return str(v).strip()
+
+
+def _stripe_object_metadata_to_dict(md) -> dict:
+    """Normalize Stripe SDK metadata (dict or StripeObject) to plain str -> str."""
+    if md is None:
+        return {}
+    if isinstance(md, dict):
+        raw = md
+    else:
+        to_dict = getattr(md, "to_dict", None)
+        if callable(to_dict):
+            try:
+                raw = to_dict()
+            except Exception:
+                raw = {}
+        else:
+            try:
+                raw = dict(md)
+            except Exception:
+                raw = {}
+    out: dict = {}
+    for k, v in (raw or {}).items():
+        if v is None:
+            continue
+        out[str(k)] = _coerce_stripe_metadata_value(v)
+    return out
+
+
+def _stripe_metadata_dict(session) -> dict:
+    """Session metadata plus PaymentIntent metadata when expanded (Stripe may surface either)."""
+    combined: dict = {}
+    combined.update(_stripe_object_metadata_to_dict(getattr(session, "metadata", None)))
+    pi = getattr(session, "payment_intent", None)
+    if pi is not None and not isinstance(pi, str):
+        combined.update(_stripe_object_metadata_to_dict(getattr(pi, "metadata", None)))
+    return combined
+
+
+def _meta_ci_get(meta: dict, key: str) -> str:
+    lk = key.casefold()
+    for k, v in meta.items():
+        if str(k).casefold() == lk:
+            return _coerce_stripe_metadata_value(v)
+    return ""
+
+
+def _parse_ids_from_event_sphere_json(data: dict) -> List[str]:
+    """Read ids from compact checkout JSON; tolerate string / CSV / alternate keys."""
+    raw = data.get("ids")
+    raw_list: list = []
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.startswith("["):
+            try:
+                parsed = json.loads(s)
+                raw_list = parsed if isinstance(parsed, list) else []
+            except Exception:
+                raw_list = [x.strip() for x in s.split(",") if x.strip()]
+        elif s:
+            raw_list = [x.strip() for x in s.split(",") if x.strip()]
+    elif isinstance(raw, list):
+        raw_list = raw
+    out = [str(x).strip() for x in raw_list if str(x).strip()]
+    if out:
+        return out
+    alt = data.get("order_ids")
+    if isinstance(alt, str):
+        return [x.strip() for x in alt.split(",") if x.strip()]
+    if isinstance(alt, list):
+        return [str(x).strip() for x in alt if str(x).strip()]
+    return []
+
+
+def _checkout_session_is_paid(session) -> bool:
+    """Stripe SDK may return strings or enums; Checkout success is paid and/or status complete."""
+    ps = getattr(session, "payment_status", None)
+    ps_s = (
+        ps
+        if isinstance(ps, str)
+        else (getattr(ps, "value", None) or getattr(ps, "name", None) or str(ps or ""))
+    )
+    if str(ps_s).lower() == "paid":
+        return True
+    st = getattr(session, "status", None)
+    st_s = (
+        st
+        if isinstance(st, str)
+        else (getattr(st, "value", None) or getattr(st, "name", None) or str(st or ""))
+    )
+    return str(st_s).lower() == "complete"
+
+
+def _order_ids_from_checkout_metadata(
+    session, customer_id: str, db: Session
+) -> List[str]:
+    """Read order ids from Stripe session metadata; confirm orders belong to this customer (DB is source of truth)."""
+    meta = _stripe_metadata_dict(session)
+    blob = _meta_ci_get(meta, "event_sphere_pay")
+    ids: List[str] = []
+    if blob:
+        try:
+            parsed = json.loads(blob)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not read payment session payload: {e!s}",
+            ) from e
+        if not isinstance(parsed, dict):
+            parsed = {}
+        ids = _parse_ids_from_event_sphere_json(parsed)
+
+    if not ids:
+        csv = _meta_ci_get(meta, "order_ids")
+        ids = [x.strip() for x in csv.split(",") if x.strip()]
+
+    if not ids:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Payment session is missing order references. "
+                "If this payment was started before the latest app update, start a new checkout from Book."
+            ),
+        )
+
+    try:
+        _orders_owned_by_customer(db, customer_id, ids)
+    except HTTPException as e:
+        if e.status_code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Sign in as the same customer who started checkout, then open this payment link again."
+                ),
+            ) from e
+        raise
+    return ids
+
+
+class PaymentCheckoutBody(BaseModel):
+    order_ids: List[str] = Field(..., min_length=1)
+    success_url: str = Field(..., min_length=8)
+    cancel_url: str = Field(..., min_length=8)
+
+
+class PaymentSessionBody(BaseModel):
+    session_id: str = Field(..., min_length=8)
+
+
+@router.post("/payment/stripe-checkout")
+def create_stripe_checkout_session(
+    body: PaymentCheckoutBody,
+    db: Session = Depends(get_db),
+    customer_id: str = Depends(get_current_customer_id),
+):
+    """Creates a Stripe Checkout Session (requires STRIPE_SECRET_KEY in app/.env or project .env)."""
+    if not _payment_redirect_allowed(body.success_url) or not _payment_redirect_allowed(body.cancel_url):
+        raise HTTPException(
+            status_code=400,
+            detail="success_url and cancel_url must start with an origin listed in PAYMENT_ALLOWED_ORIGINS",
+        )
+    if "{CHECKOUT_SESSION_ID}" not in body.success_url:
+        raise HTTPException(
+            status_code=400,
+            detail="success_url must include the literal {CHECKOUT_SESSION_ID} for Stripe Checkout",
+        )
+    orders, total = _assert_customer_orders_unpaid(db, customer_id, body.order_ids)
+    key = _require_stripe_secret_key()
+    try:
+        import stripe
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="Stripe SDK not installed. Run: pip install stripe",
+        )
+    stripe.api_key = key
+    amount_cents = max(int(round(total * 100)), 50)
+    cid = str(customer_id).strip()
+    id_list = [str(o["id"]) for o in orders]
+    pay_meta = json.dumps({"c": cid, "ids": id_list})
+    if len(pay_meta) > 500:
+        raise HTTPException(
+            status_code=400,
+            detail="Too many orders for one Stripe payment (metadata limit). Pay in smaller groups.",
+        )
+    # Redundant CSV survives if JSON blob is unreadable in Stripe responses (each metadata value ≤500 chars).
+    order_ids_csv = ",".join(id_list)
+    if len(order_ids_csv) > 500:
+        raise HTTPException(
+            status_code=400,
+            detail="Too many orders for one Stripe payment (metadata limit). Pay in smaller groups.",
+        )
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "unit_amount": amount_cents,
+                        "product_data": {
+                            "name": f"EventSphere booking ({len(orders)} order(s))",
+                        },
+                    },
+                    "quantity": 1,
+                }
+            ],
+            success_url=body.success_url,
+            cancel_url=body.cancel_url,
+            metadata={
+                "event_sphere_pay": pay_meta,
+                "customer_id": cid,
+                "order_ids": order_ids_csv,
+            },
+        )
+    except Exception as e:
+        msg = str(e)
+        if "Invalid API Key" in msg or "No API key provided" in msg:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Stripe rejected the secret key. Use the Secret key from "
+                    "https://dashboard.stripe.com/test/apikeys (long sk_test_…), not the 4242 card number."
+                ),
+            ) from e
+        raise HTTPException(status_code=502, detail=f"Stripe error: {msg}") from e
+    return {
+        "url": session.url,
+        "session_id": session.id,
+        "order_count": len(orders),
+        "total": round(total, 2),
+    }
+
+
+@router.post("/payment/complete-session")
+def complete_stripe_checkout_session(
+    body: PaymentSessionBody,
+    db: Session = Depends(get_db),
+    customer_id: str = Depends(get_current_customer_id),
+):
+    """After Stripe redirects back with session_id, mark linked orders Paid."""
+    try:
+        key = _require_stripe_secret_key()
+        try:
+            import stripe
+        except ImportError:
+            raise HTTPException(status_code=500, detail="Stripe SDK not installed")
+        stripe.api_key = key
+        try:
+            session = stripe.checkout.Session.retrieve(
+                body.session_id,
+                expand=["payment_intent"],
+            )
+        except Exception as e:
+            msg = str(e)
+            if "Invalid API Key" in msg:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Stripe rejected the secret key. Update STRIPE_SECRET_KEY in app/.env with your Dashboard Secret key.",
+                ) from e
+            raise HTTPException(status_code=400, detail=f"Invalid session: {msg}") from e
+
+        if not _checkout_session_is_paid(session):
+            ps = getattr(session, "payment_status", None)
+            st = getattr(session, "status", None)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Checkout is not paid yet (payment_status={ps!r}, status={st!r}).",
+            )
+
+        order_ids = _order_ids_from_checkout_metadata(session, customer_id, db)
+        if not order_ids:
+            raise HTTPException(status_code=400, detail="Session is missing order data")
+
+        rows = _orders_owned_by_customer(db, customer_id, order_ids)
+        if all((str(r.get("payment_status") or "").strip().lower() == "paid") for r in rows):
+            return {"ok": True, "updated": 0, "order_ids": order_ids, "already_completed": True}
+        _assert_customer_orders_unpaid(db, customer_id, order_ids)
+        updated = _mark_orders_paid(db, order_ids)
+        return {"ok": True, "updated": updated, "order_ids": order_ids}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not finalize payment: {e!s}",
+        ) from e
 
 
 @router.patch("/events/{event_id}/complete")
 def mark_event_complete(
-    event_id: str, body: EventCompleteBody, db: Session = Depends(get_db)
+    event_id: str,
+    db: Session = Depends(get_db),
+    customer_id: str = Depends(get_current_customer_id),
 ):
-    """Organizer marks an event completed (required before customers may rate)."""
+    """Customer marks their own event completed (Confirmed → Completed) so they can rate."""
+    eid = (event_id or "").strip()
+    cid = (customer_id or "").strip()
+    if not eid:
+        raise HTTPException(status_code=400, detail="event_id is required")
+    check = db.execute(
+        text(
+            """
+        SELECT status::text AS status FROM events
+        WHERE id = :event_id AND customer_id = :cid
+        LIMIT 1
+        """
+        ),
+        {"event_id": eid, "cid": cid},
+    ).first()
+    if check is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Event not found for this account (check you are signed in as the booking owner)",
+        )
+    st = (dict(check._mapping).get("status") or "").strip()
+    if st.casefold() != "confirmed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only confirmed events can be marked complete (current status: {st})",
+        )
     r = db.execute(
         text(
             """
-        UPDATE events SET status = 'Completed'
-        WHERE id = :event_id AND org_id = :org_id
+        UPDATE events SET status = 'Completed'::event_status
+        WHERE id = :event_id AND customer_id = :cid
+              AND LOWER(TRIM(BOTH FROM status::text)) = 'confirmed'
         RETURNING id
-    """
+        """
         ),
-        {"event_id": event_id, "org_id": body.org_id},
+        {"event_id": eid, "cid": cid},
     )
     if r.first() is None:
-        raise HTTPException(status_code=404, detail="Event not found for this organizer")
+        raise HTTPException(
+            status_code=409,
+            detail="Event status changed; refresh the page and try again",
+        )
     db.commit()
     return {"ok": True, "event_id": event_id, "status": "Completed"}
 
@@ -437,7 +957,17 @@ def organizer_listings(org_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/customer/{customer_id}/dashboard")
-def get_dashboard(customer_id: str, db: Session = Depends(get_db)):
+def get_dashboard(
+    customer_id: str,
+    db: Session = Depends(get_db),
+    authed_customer_id: str = Depends(get_current_customer_id),
+):
+    """Bearer must match URL customer_id (same rule as mark-complete and ratings)."""
+    if (customer_id or "").strip() != (authed_customer_id or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot load another customer's dashboard",
+        )
     events_result = db.execute(
         text(
             """
@@ -445,7 +975,11 @@ def get_dashboard(customer_id: str, db: Session = Depends(get_db)):
                o.company_name AS company_name, e.org_id AS org_id,
                (SELECT vr.rating FROM vendor_reviews vr WHERE vr.event_id = e.id LIMIT 1) AS my_rating,
                CASE
-                 WHEN e.status::text = 'Completed'
+                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'confirmed' THEN true
+                 ELSE false
+               END AS can_mark_complete,
+               CASE
+                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'completed'
                       AND NOT EXISTS (SELECT 1 FROM vendor_reviews r2 WHERE r2.event_id = e.id)
                  THEN true
                  ELSE false
@@ -479,6 +1013,60 @@ def get_dashboard(customer_id: str, db: Session = Depends(get_db)):
         "events": [dict(row._mapping) for row in events_result.fetchall()],
         "orders": [dict(row._mapping) for row in orders_result.fetchall()],
     }
+
+
+@router.get("/customer/{customer_id}/event-history")
+def get_event_history(
+    customer_id: str,
+    db: Session = Depends(get_db),
+    authed_customer_id: str = Depends(get_current_customer_id),
+):
+    """Past events with vendor info and ratings (Bearer must match customer_id)."""
+    if customer_id != authed_customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot view another customer's history",
+        )
+    result = db.execute(
+        text(
+            """
+        SELECT e.id AS id, e.event_date AS event_date, e.status::text AS status,
+               e.org_id AS org_id, o.company_name AS company_name,
+               vr.rating AS rating, vr.comment AS review_comment, vr.id AS review_id,
+               CASE
+                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'confirmed' THEN true
+                 ELSE false
+               END AS can_mark_complete,
+               CASE
+                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'completed'
+                      AND NOT EXISTS (SELECT 1 FROM vendor_reviews r2 WHERE r2.event_id = e.id)
+                 THEN true
+                 ELSE false
+               END AS can_rate,
+               (
+                 SELECT sl.title
+                 FROM event_orders eo
+                 JOIN service_listings sl ON sl.id = eo.listing_id
+                 WHERE eo.event_id = e.id
+                 ORDER BY eo.id DESC
+                 LIMIT 1
+               ) AS service_title
+        FROM events e
+        JOIN organizer_info o ON e.org_id = o.org_id
+        LEFT JOIN vendor_reviews vr ON vr.event_id = e.id
+        WHERE e.customer_id = :customer_id
+        ORDER BY e.event_date DESC NULLS LAST, e.id DESC
+        """
+        ),
+        {"customer_id": customer_id},
+    )
+    rows = []
+    for row in result.fetchall():
+        m = dict(row._mapping)
+        if m.get("rating") is not None:
+            m["rating"] = int(m["rating"])
+        rows.append(m)
+    return {"events": rows}
 
 
 @router.get("/organizer/{org_id}/analytics")

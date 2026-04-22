@@ -43,10 +43,15 @@
 
 .es-home-aside__actions.toolbar {
   margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.es-home-aside__actions .btn.primary {
+.es-home-aside__actions .btn.primary,
+.es-home-aside__actions .btn.small {
   width: 100%;
+  text-align: center;
 }
 
 .es-home-hero__eyebrow {
@@ -306,16 +311,236 @@
   max-width: 32rem;
 }
 
+/* —— Customer payment (Stripe / simulate) —— */
+.es-page--payment {
+  max-width: 720px;
+}
+
+.es-pay-header {
+  margin-bottom: 1rem;
+}
+
+.es-pay-lede code {
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
+.es-pay-panel {
+  padding: 1.15rem 1.25rem;
+}
+
+.es-pay-lines {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--org-radius, 10px);
+  overflow: hidden;
+}
+
+.es-pay-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+}
+
+.es-pay-line:last-child {
+  border-bottom: none;
+}
+
+.es-pay-line__amt {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.es-pay-total {
+  font-size: 1.05rem;
+  margin: 0 0 1rem;
+}
+
+.es-pay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.es-pay-footnote {
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+.es-pay-footnote code {
+  font-size: 0.9em;
+}
+
+.es-pay-success {
+  color: #166534;
+  font-weight: 600;
+}
+
 /* —— Customer dashboard —— */
 .es-page--dashboard .page-header {
   margin-bottom: 1.25rem;
 }
 
-.es-dash-kpis {
+.es-dash-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.es-dash-header .btn {
+  align-self: flex-start;
+}
+
+.es-dash-callout {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--org-radius, 10px);
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a5f;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.es-dash-events__hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.es-home-hero__desc a {
+  font-weight: 600;
+}
+
+/* —— Customer event & rating history —— */
+.es-page--history .es-history-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .es-page--history .es-history-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .es-page--history .es-history-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+.es-history-panel {
+  padding: 1.15rem 1.25rem;
+}
+
+.es-history-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.es-history-panel__head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.es-history-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--org-radius, 10px);
+  background: #fff;
+}
+
+.es-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.es-history-table th,
+.es-history-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.es-history-table th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.es-history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.es-history-event-id {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.es-history-service {
+  font-size: 0.8125rem;
+}
+
+.es-history-org {
+  font-size: 0.75rem;
+}
+
+.es-history-stars {
+  color: #f59e0b;
+  letter-spacing: 0.05em;
+}
+
+.es-history-comment {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  max-width: 22rem;
+}
+
+.es-history-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.es-dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .es-dash-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {

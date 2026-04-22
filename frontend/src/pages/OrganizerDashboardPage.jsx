@@ -4,7 +4,6 @@ import {
   getOrganizers,
   getOrganizerAnalytics,
   getOrganizerEvents,
-  markEventComplete,
   getOrganizerReviews,
   getOrganizerListings,
   respondToEvent,
@@ -111,18 +110,6 @@ export default function OrganizerDashboardPage() {
     setListings(ls.data);
   };
 
-  const complete = async (eventId) => {
-    setActionId(eventId);
-    try {
-      await markEventComplete(eventId, orgId);
-      await refresh();
-    } catch (e) {
-      console.error(e);
-      alert(e.response?.data?.detail || 'Could not update event');
-    }
-    setActionId(null);
-  };
-
   const respond = async (eventId, action) => {
     setActionId(eventId);
     try {
@@ -136,6 +123,7 @@ export default function OrganizerDashboardPage() {
   };
 
   const pending = events.filter((e) => String(e.status) === 'Pending');
+  const confirmed = events.filter((e) => String(e.status) === 'Confirmed');
   const completed = events.filter((e) => String(e.status) === 'Completed');
 
   const earnings = analytics ? Number(analytics.total_earnings).toFixed(2) : '0.00';
@@ -314,8 +302,12 @@ export default function OrganizerDashboardPage() {
             </div>
           </section>
 
-          <section className="org-panel org-panel--footer">
-            <h2 className="org-panel__title org-panel__title--sm">Completed Event History</h2>
+          <section className="org-panel">
+            <h2 className="org-panel__title org-panel__title--sm">Confirmed — awaiting customer</h2>
+            <p className="org-muted org-panel__lede">
+              After you confirm a booking, the customer marks the event complete when the service is delivered, then
+              they can leave a rating.
+            </p>
             <div className="org-table-wrap">
               <table className="org-table">
                 <thead>
@@ -324,13 +316,50 @@ export default function OrganizerDashboardPage() {
                     <th>Date</th>
                     <th>Customer</th>
                     <th>Order total</th>
-                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmed.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="org-table__empty">
+                        No confirmed events waiting on the customer.
+                      </td>
+                    </tr>
+                  ) : (
+                    confirmed.map((ev) => (
+                      <tr key={ev.id}>
+                        <td>{ev.id}</td>
+                        <td>{formatDate(ev.event_date)}</td>
+                        <td>{ev.customer_name || ev.customer_id}</td>
+                        <td>
+                          {ev.order_total != null
+                            ? `$${Number(ev.order_total).toFixed(2)}`
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="org-panel org-panel--footer">
+            <h2 className="org-panel__title org-panel__title--sm">Completed events</h2>
+            <div className="org-table-wrap">
+              <table className="org-table">
+                <thead>
+                  <tr>
+                    <th>Event ID</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Order total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {completed.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="org-table__empty">
+                      <td colSpan={4} className="org-table__empty">
                         No completed events yet.
                       </td>
                     </tr>
@@ -345,25 +374,12 @@ export default function OrganizerDashboardPage() {
                             ? `$${Number(ev.order_total).toFixed(2)}`
                             : '—'}
                         </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="org-btn org-btn--sm"
-                            disabled={actionId === ev.id}
-                            onClick={() => complete(ev.id)}
-                          >
-                            {actionId === ev.id ? '…' : 'Mark completed'}
-                          </button>
-                        </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
             </div>
-            <p className="org-hint">
-              Confirm pending orders first. Mark completed after the event so customers can rate you.
-            </p>
           </section>
         </>
       )}

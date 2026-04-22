@@ -4,6 +4,10 @@ env/
 __pycache__/
 *.pyc
 *.pyo
+# Customer app (nested routes/models, etc.)
+app/customer/**/__pycache__/
+app/customer/**/*.pyc
+app/customer/**/*.pyo
 .env
 **/.env
 .vscode/

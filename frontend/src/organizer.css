@@ -402,6 +402,12 @@ a.org-btn--link {
   color: var(--org-text-heading);
 }
 
+.org-panel__lede {
+  margin: -0.35rem 0 1rem;
+  max-width: 48rem;
+  line-height: 1.5;
+}
+
 .org-pill {
   font-size: 0.75rem;
   font-weight: 600;

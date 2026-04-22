@@ -5,6 +5,9 @@ import HomePage from './pages/HomePage';
 import BookingPage from './pages/BookingPage';
 import DashboardPage from './pages/DashboardPage';
 import CustomerChatPage from './pages/CustomerChatPage';
+import EventHistoryPage from './pages/EventHistoryPage';
+import PaymentPage from './pages/PaymentPage';
+import PaymentDonePage from './pages/PaymentDonePage';
 import OrganizerDashboardPage from './pages/OrganizerDashboardPage';
 import OrganizerPlaceholderPage from './pages/OrganizerPlaceholderPage';
 import OrganizerLayout from './layouts/OrganizerLayout';
@@ -21,6 +24,9 @@ function AppShell() {
           <Route path="/customer" element={<HomePage />} />
           <Route path="/book" element={<BookingPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/customer/history" element={<EventHistoryPage />} />
+          <Route path="/customer/payment" element={<PaymentPage />} />
+          <Route path="/customer/payment/done" element={<PaymentDonePage />} />
           <Route path="/customer/chat" element={<CustomerChatPage />} />
         </Route>
       </Route>
