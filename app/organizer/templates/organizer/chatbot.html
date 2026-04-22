@@ -20,8 +20,20 @@
             <div class="chat-messages" id="msgArea">
                 <div class="message received">
                     <p>Hello! I am the EventSphere AI Assistant. How can I help you plan your event today?</p>
-                    <span class="timestamp">Just now</span>
+                    <span class="timestamp">Always Online</span>
                 </div>
+
+                {% for chat in history %}
+                    <div class="message sent">
+                        <p>{{ chat.query_text }}</p>
+                        <span class="timestamp">{{ chat.time }}</span>
+                    </div>
+                    
+                    <div class="message received">
+                        <p>{{chat.ai_text["reply"]}}</p>
+                        <span class="timestamp">{{ chat.time }}</span>
+                    </div>
+                {% endfor %}
             </div>
 
             <div class="chat-input-area" style="display: flex;">
@@ -48,13 +60,14 @@
 
             try {
                 // Update this URL to point to your actual FastAPI AI route
-                const response = await fetch('/chatbot/ask', { 
+                const response = await fetch('/customer/chatbot', { 
                     method: 'POST',
                     body: formData
                 });
 
                 if (response.ok) {
                     const data = await response.json();
+                    
                     // 3. Draw the AI's response (Gray bubble)
                     appendMessage(data.reply, 'received');
                 } else {
