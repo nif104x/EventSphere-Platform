@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app import models
 from app.admin.routers import admin
 from app.database import SessionLocal, engine
+from app.reports.routers import reports
 from app.search.routers import search
 from app.tasks.routers import tasks
 
@@ -36,6 +37,7 @@ app.add_middleware(
 app.mount("/assets", StaticFiles(directory="app/static_shared"), name="assets")
 
 app.include_router(admin.router)
+app.include_router(reports.router)
 app.include_router(search.router)
 app.include_router(tasks.router)
 
