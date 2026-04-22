@@ -1,1 +1,1 @@
-
+"""EventSphere backend application package."""
