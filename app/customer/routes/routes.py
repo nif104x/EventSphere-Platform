@@ -1,6 +1,10 @@
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel, Field
@@ -10,6 +14,72 @@ from app.customer.database import get_db
 from app.organizer import ouath2
 
 router = APIRouter(prefix="/api", tags=["api"])
+
+_bearer = HTTPBearer(auto_error=False)
+
+
+def _fmt_msg_time(ts) -> str:
+    if ts is None:
+        return ""
+    if isinstance(ts, datetime):
+        return ts.strftime("%I:%M %p")
+    return str(ts)[:8]
+
+
+def get_current_customer_id(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> str:
+    """JWT from customer login (same secret as organizer); must be a Customer profile."""
+    if not creds or creds.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    raw_token = (creds.credentials or "").strip()
+    if not raw_token or raw_token.lower() in ("undefined", "null"):
+        raise credentials_exception
+    try:
+        payload = jwt.decode(
+            raw_token,
+            ouath2.SECRET_KEY,
+            algorithms=[ouath2.ALGORITHM],
+            leeway=timedelta(seconds=120),
+        )
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+    except PyJWTError:
+        raise credentials_exception from None
+    uid = payload.get("user_id")
+    if uid is None:
+        raise credentials_exception
+    user_id = str(uid)
+    row = db.execute(
+        text(
+            """
+            SELECT c.customer_id AS customer_id
+            FROM customer_info c
+            WHERE c.customer_id = :uid
+            """
+        ),
+        {"uid": user_id},
+    ).first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a customer session",
+        )
+    return dict(row._mapping)["customer_id"]
 
 
 _ALLOWED_TABLES = frozenset({"events", "event_orders", "vendor_reviews"})
@@ -480,3 +550,174 @@ def organizer_events(org_id: str, db: Session = Depends(get_db)):
         if r.get("order_total") is not None:
             r["order_total"] = float(r["order_total"])
     return rows
+
+
+# --- Customer ↔ organizer chat (same `chat_rooms` / `messages` tables as organizer UI) ---
+
+
+class ChatSendBody(BaseModel):
+    room_id: str
+    text: str = Field(..., min_length=1, max_length=8000)
+
+
+class ChatOpenBody(BaseModel):
+    event_id: str
+
+
+@router.get("/customer/chat/rooms")
+def customer_chat_rooms(
+    customer_id: str = Depends(get_current_customer_id),
+    db: Session = Depends(get_db),
+):
+    result = db.execute(
+        text(
+            """
+            SELECT cr.id AS room_id, cr.org_id AS org_id, cr.event_id AS event_id,
+                   o.company_name AS company_name
+            FROM chat_rooms cr
+            INNER JOIN organizer_info o ON o.org_id = cr.org_id
+            WHERE cr.customer_id = :cid
+            ORDER BY cr.id DESC
+            """
+        ),
+        {"cid": customer_id},
+    )
+    return [dict(row._mapping) for row in result.fetchall()]
+
+
+@router.post("/customer/chat/rooms/open")
+def customer_chat_open_room(
+    body: ChatOpenBody,
+    customer_id: str = Depends(get_current_customer_id),
+    db: Session = Depends(get_db),
+):
+    """Return existing chat room for this event or create one (customer must own the event)."""
+    ev = db.execute(
+        text(
+            """
+            SELECT id AS id, org_id AS org_id, customer_id AS customer_id
+            FROM events
+            WHERE id = :eid
+            LIMIT 1
+            """
+        ),
+        {"eid": body.event_id.strip()},
+    ).first()
+    if ev is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    em = dict(ev._mapping)
+    if em.get("customer_id") != customer_id:
+        raise HTTPException(status_code=403, detail="Not your event")
+    existing = db.execute(
+        text(
+            """
+            SELECT id AS id
+            FROM chat_rooms
+            WHERE event_id = :eid AND customer_id = :cid
+            LIMIT 1
+            """
+        ),
+        {"eid": body.event_id.strip(), "cid": customer_id},
+    ).first()
+    if existing:
+        return {"room_id": dict(existing._mapping)["id"]}
+    rid = f"ROOM-{uuid.uuid4().hex[:6].upper()}"
+    db.execute(
+        text(
+            """
+            INSERT INTO chat_rooms (id, customer_id, org_id, event_id)
+            VALUES (:id, :cid, :oid, :eid)
+            """
+        ),
+        {
+            "id": rid,
+            "cid": customer_id,
+            "oid": em["org_id"],
+            "eid": body.event_id.strip(),
+        },
+    )
+    db.commit()
+    return {"room_id": rid}
+
+
+@router.get("/customer/chat/rooms/{room_id}/messages")
+def customer_chat_messages(
+    room_id: str,
+    customer_id: str = Depends(get_current_customer_id),
+    db: Session = Depends(get_db),
+):
+    ok = db.execute(
+        text(
+            """
+            SELECT 1 AS ok
+            FROM chat_rooms
+            WHERE id = :rid AND customer_id = :cid
+            LIMIT 1
+            """
+        ),
+        {"rid": room_id, "cid": customer_id},
+    ).first()
+    if ok is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+    rows = db.execute(
+        text(
+            """
+            SELECT m.id AS id, m.message_text AS message_text, m.sender_id AS sender_id,
+                   m.timestamp AS timestamp
+            FROM messages m
+            WHERE m.room_id = :rid
+            ORDER BY m.timestamp ASC NULLS LAST, m.id ASC
+            """
+        ),
+        {"rid": room_id},
+    ).fetchall()
+    msg_list = []
+    for row in rows:
+        m = dict(row._mapping)
+        msg_list.append(
+            {
+                "id": m.get("id"),
+                "text": m.get("message_text"),
+                "is_mine": m.get("sender_id") == customer_id,
+                "time": _fmt_msg_time(m.get("timestamp")),
+            }
+        )
+    return {"messages": msg_list}
+
+
+@router.post("/customer/chat/messages")
+def customer_chat_send(
+    body: ChatSendBody,
+    customer_id: str = Depends(get_current_customer_id),
+    db: Session = Depends(get_db),
+):
+    ok = db.execute(
+        text(
+            """
+            SELECT 1 AS ok
+            FROM chat_rooms
+            WHERE id = :rid AND customer_id = :cid
+            LIMIT 1
+            """
+        ),
+        {"rid": body.room_id.strip(), "cid": customer_id},
+    ).first()
+    if ok is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+    msg_id = f"MSG-{uuid.uuid4().hex[:8]}"
+    db.execute(
+        text(
+            """
+            INSERT INTO messages (id, room_id, sender_id, message_text)
+            VALUES (:id, :room_id, :sender_id, :text)
+            """
+        ),
+        {
+            "id": msg_id,
+            "room_id": body.room_id.strip(),
+            "sender_id": customer_id,
+            "text": body.text.strip(),
+        },
+    )
+    db.commit()
+    return {"status": "success", "msg_id": msg_id}

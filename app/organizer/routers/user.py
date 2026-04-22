@@ -236,12 +236,13 @@ from datetime import timedelta
 
 @router.post("/login", name="login_post")
 def login(request:Request, username:str=Form(...), password: str = Form(...), db: Session=Depends(database.get_db)):
-    
+    username = (username or "").strip()
+    password = (password or "").strip()
     user = db.query(models.UserMain).filter(models.UserMain.username==username).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invalid credential")
     
-    if user.password != password:
+    if not utils.password_matches_stored(password, user.password):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invalid credential")
 
     access_token = ouath2.create_access_token(

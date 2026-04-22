@@ -443,6 +443,14 @@
   border-left-color: #e5e7eb;
 }
 
+.es-dash-events .dash-row__actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .empty-state--tight {
   padding: 0.75rem 0 !important;
   margin: 0;

@@ -4,6 +4,7 @@ import CustomerLoginPage from './pages/CustomerLoginPage';
 import HomePage from './pages/HomePage';
 import BookingPage from './pages/BookingPage';
 import DashboardPage from './pages/DashboardPage';
+import CustomerChatPage from './pages/CustomerChatPage';
 import OrganizerDashboardPage from './pages/OrganizerDashboardPage';
 import OrganizerPlaceholderPage from './pages/OrganizerPlaceholderPage';
 import OrganizerLayout from './layouts/OrganizerLayout';
@@ -20,6 +21,7 @@ function AppShell() {
           <Route path="/customer" element={<HomePage />} />
           <Route path="/book" element={<BookingPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/customer/chat" element={<CustomerChatPage />} />
         </Route>
       </Route>
       <Route path="/organizer" element={<OrganizerLayout />}>

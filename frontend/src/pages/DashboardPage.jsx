@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getDashboard, submitRating } from '../api';
 import { getCustomerId } from '../customerStorage';
 
@@ -136,6 +137,14 @@ const DashboardPage = () => {
                     {event.my_rating != null && (
                       <span className="muted"> · Your rating: ★ {Number(event.my_rating)}</span>
                     )}
+                  </div>
+                  <div className="dash-row__actions">
+                    <Link
+                      to={`/customer/chat?eventId=${encodeURIComponent(event.id)}`}
+                      className="btn small"
+                    >
+                      Message organizer
+                    </Link>
                   </div>
                   {(event.can_rate === true || event.can_rate === 'true') && (
                     <button type="button" className="btn primary small" onClick={() => openRate(event)}>

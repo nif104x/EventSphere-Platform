@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getCustomerAccessToken } from './customerStorage';
 
 // Dev: Vite proxies `/api` → FastAPI. Prod default: call API on :8000 unless VITE_API_BASE is set.
 const raw =
@@ -8,6 +9,14 @@ const API_BASE = raw.replace(/\/$/, '');
 
 const api = axios.create({
   baseURL: API_BASE,
+});
+
+api.interceptors.request.use((config) => {
+  const token = getCustomerAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export const loginCustomer = (body) => api.post('/customer/login', body);
@@ -27,5 +36,13 @@ export const getOrganizerReviews = (orgId) => api.get(`/organizer/${orgId}/revie
 export const getOrganizerListings = (orgId) => api.get(`/organizer/${orgId}/listings`);
 export const respondToEvent = (eventId, data) =>
   api.patch(`/events/${eventId}/organizer-response`, data);
+
+export const getChatRooms = () => api.get('/customer/chat/rooms');
+export const openChatRoomForEvent = (event_id) =>
+  api.post('/customer/chat/rooms/open', { event_id });
+export const getChatMessages = (roomId) =>
+  api.get(`/customer/chat/rooms/${encodeURIComponent(roomId)}/messages`);
+export const sendChatMessage = (room_id, text) =>
+  api.post('/customer/chat/messages', { room_id, text });
 
 export default api;

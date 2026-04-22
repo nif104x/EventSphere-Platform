@@ -29,6 +29,9 @@ export default function CustomerLayout() {
           <NavLink to="/dashboard" className={linkClass}>
             My dashboard
           </NavLink>
+          <NavLink to="/customer/chat" className={linkClass}>
+            Messages
+          </NavLink>
         </nav>
         <div className="org-sidebar__foot">
           <div className="org-sidebar__account">
