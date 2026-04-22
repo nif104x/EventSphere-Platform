@@ -14,9 +14,39 @@ from app.models import (
     UserMain,
     UserStatus,
 )
+from app.tasks.services.reminders import send_customer_due_reminders
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="app/admin/templates")
+
+def _admin_ui_data(db: Session):
+    listings = (
+        db.query(ServiceListing, OrganizerInfo.company_name)
+        .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
+        .order_by(ServiceListing.id)
+        .all()
+    )
+
+    orders = (
+        db.query(EventOrder)
+        .options(
+            joinedload(EventOrder.event).joinedload(Event.customer),
+            joinedload(EventOrder.event).joinedload(Event.organizer),
+            joinedload(EventOrder.listing),
+            joinedload(EventOrder.selections).joinedload(EventAddonSelection.addon),
+        )
+        .order_by(EventOrder.id)
+        .all()
+    )
+
+    users = (
+        db.query(UserMain, UserStatus)
+        .outerjoin(UserStatus, UserMain.id == UserStatus.user_id)
+        .order_by(UserMain.id)
+        .all()
+    )
+
+    return listings, orders, users
 
 
 @router.get("/listings")
@@ -144,31 +174,7 @@ def set_status(user_id: str, body: AdminSetUserStatusIn, db: Session = Depends(g
 
 @router.get("/ui", response_class=HTMLResponse)
 def admin_ui(request: Request, db: Session = Depends(get_db)):
-    listings = (
-        db.query(ServiceListing, OrganizerInfo.company_name)
-        .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
-        .order_by(ServiceListing.id)
-        .all()
-    )
-
-    orders = (
-        db.query(EventOrder)
-        .options(
-            joinedload(EventOrder.event).joinedload(Event.customer),
-            joinedload(EventOrder.event).joinedload(Event.organizer),
-            joinedload(EventOrder.listing),
-            joinedload(EventOrder.selections).joinedload(EventAddonSelection.addon),
-        )
-        .order_by(EventOrder.id)
-        .all()
-    )
-
-    users = (
-        db.query(UserMain, UserStatus)
-        .outerjoin(UserStatus, UserMain.id == UserStatus.user_id)
-        .order_by(UserMain.id)
-        .all()
-    )
+    listings, orders, users = _admin_ui_data(db)
 
     return templates.TemplateResponse(
         request,
@@ -179,6 +185,26 @@ def admin_ui(request: Request, db: Session = Depends(get_db)):
             "users": users,
             "nav_active": "admin",
             "role_badge": "Admin",
+        },
+    )
+
+@router.post("/ui/send-customer-reminders")
+def admin_ui_send_customer_reminders(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    result = send_customer_due_reminders(db, manual=True)
+    listings, orders, users = _admin_ui_data(db)
+    return templates.TemplateResponse(
+        request,
+        "admin/admin.html",
+        {
+            "listings": listings,
+            "orders": orders,
+            "users": users,
+            "nav_active": "admin",
+            "role_badge": "Admin",
+            "task_result": result,
         },
     )
 
