@@ -11,3 +11,4 @@ app/customer/**/*.pyo
 .env
 **/.env
 .vscode/
+app/.env
