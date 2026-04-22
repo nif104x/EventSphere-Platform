@@ -253,13 +253,30 @@ def login(request:Request, username:str=Form(...), password: str = Form(...), db
     redirect.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True, path="/")
 
     return redirect
-    
 
 
+# @router.get("/chatbot", response_class=HTMLResponse)
+# def dashboard_page(request: Request, current_user: models.OrganizerInfo = Depends(ouath2.get_current_user), db: Session=Depends(get_db)):
+#         past_chats = db.query(models.ChatbotInteraction).filter(models.ChatbotInteraction.customer_id==current_user.org_id).order_by(models.ChatbotInteraction.timestamp.asc()).all()
 
+#         clean_history = []
+#         for chat in past_chats:
+#             if isinstance(chat.ai_response, dict):
+#                 ai_text = chat.ai_response.get("reply", "Error: No reply text found.")
+#             else:
+#                 ai_text = str(chat.ai_response)
+            
+#             clean_history.append({
+#                  "query_text": chat.query_text,
+#                  "ai_text": chat.ai_text,
+#                  "time": chat.timestamp.strftime('%I:%M %p') if chat.timestamp else ""
+#             })
 
-
-
-@router.get("/chatbot", response_class=HTMLResponse)
-def chatbot(request:Request):
-        return templates.TemplateResponse(request,"organizer/chatbot.html", {"request": request})
+#         return templates.TemplateResponse(
+#             request,
+#             "organizer/chatbot.html",
+#             {
+#                 "request": request,
+#                 "history": clean_history 
+#             }
+#         )

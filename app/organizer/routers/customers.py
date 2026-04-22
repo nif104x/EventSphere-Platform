@@ -78,3 +78,116 @@ def customer_send_message(
         text=text
     )
     return {"status": "success", "msg_id": saved_msg.id}
+
+
+
+
+from groq import Groq
+from dotenv import load_dotenv
+import os
+import json
+
+load_dotenv()
+
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
+)
+
+@router.get("/chatbot", response_class=HTMLResponse)
+def chat(request: Request, db: Session=Depends(get_db)):
+        past_chats = db.query(models.ChatbotInteraction).filter(models.ChatbotInteraction.customer_id=="CUST-01").order_by(models.ChatbotInteraction.timestamp.asc()).all()
+
+        clean_history = []
+        for chat in past_chats:
+            if isinstance(chat.ai_response, dict):
+                ai_text = chat.ai_response.get("reply", "Error: No reply text found.")
+            else:
+                ai_text = str(chat.ai_response)
+            
+            clean_history.append({
+                 "query_text": chat.query_text,
+                 "ai_text": chat.ai_response,
+                 "time": chat.timestamp.strftime('%I:%M %p') if chat.timestamp else ""
+            })
+
+        return templates.TemplateResponse(
+            request,
+            "organizer/chatbot.html",
+            {
+                "request": request,
+                "history": clean_history 
+            }
+        )
+
+# current_user: models.CustomerInfo = Depends(ouath2.get_current_user)
+"""
+in js:
+const response = await fetch('/chatbot/ask', { 
+    method: 'POST',
+    credentials: 'include', // <--- ADD THIS LINE so it sends your login cookie!
+    body: formData
+});
+"""
+@router.post("/chatbot")
+def chat_res(request:Request,
+             query_text= Form(...), 
+             db:Session=Depends(get_db)):
+    
+    services = get_service_listings_dict(db)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": "You are a helpful event gigs recommendation chatbot."},
+            {"role": "user", "content": f"User query: {query_text}\n\nProduct data: {services}\n\n Direction: If the user is not asking about event services, respond naturally as a casual EventSphere assistant; if they do request services, provide the most relevant and complete answer including required details like organization ID, company name, and any other necessary information to help the customer clearly understand the next steps."}
+        ],
+        temperature=0.7
+    )
+
+    ai_text = response.choices[0].message.content
+
+    ai_json = {
+        "reply": ai_text
+    }
+
+    chat_entry = models.ChatbotInteraction(
+        id=str(uuid.uuid4()),
+        customer_id="CUST-01",
+        query_text=query_text,
+        ai_response=ai_json
+    )
+    db.add(chat_entry)
+    db.commit()
+    db.refresh(chat_entry)
+
+    return {
+        "reply": ai_text
+    }
+
+
+
+#############################
+def get_service_listings_dict(db: Session):
+    listings = db.query(models.ServiceListing).all()
+    
+    listings_dict = {}
+    
+    for gig in listings:
+        addon_data = [
+            {
+                "id": addon.id,
+                "addon_name": addon.addon_name,
+                "price": float(addon.price)
+            }
+            for addon in gig.addons
+        ]
+        
+        listings_dict[gig.id] = {
+            "id": gig.id,
+            "org_id": gig.org_id,
+            "category": gig.category,
+            "title": gig.title,
+            "base_price": float(gig.base_price),
+            "addons": addon_data
+        }
+        
+    return listings_dict
