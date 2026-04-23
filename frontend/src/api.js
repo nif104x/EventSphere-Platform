@@ -43,6 +43,9 @@ api.interceptors.response.use(
 
 export const loginCustomer = (body) => api.post('/customer/login', body);
 
+/** Clears HttpOnly `access_token` used by Jinja customer routes (chatbot). */
+export const logoutCustomer = () => api.post('/customer/logout');
+
 export const getOrganizers = () => api.get('/organizers');
 export const getServices = (orgId) => api.get(`/services/${orgId}`);
 export const getAddons = (listingId) => api.get(`/addons/${listingId}`);

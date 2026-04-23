@@ -30,7 +30,7 @@
                     </div>
                     
                     <div class="message received">
-                        <p>{{chat.ai_text["reply"]}}</p>
+                        <p>{{ chat.ai_text.get('reply', '') if chat.ai_text is mapping else chat.ai_text }}</p>
                         <span class="timestamp">{{ chat.time }}</span>
                     </div>
                 {% endfor %}
@@ -62,6 +62,7 @@
                 // Update this URL to point to your actual FastAPI AI route
                 const response = await fetch('/customer/chatbot', { 
                     method: 'POST',
+                    credentials: 'same-origin',
                     body: formData
                 });
 

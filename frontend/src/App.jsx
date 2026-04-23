@@ -9,7 +9,7 @@ import EventHistoryPage from './pages/EventHistoryPage';
 import PaymentPage from './pages/PaymentPage';
 import PaymentDonePage from './pages/PaymentDonePage';
 import OrganizerDashboardPage from './pages/OrganizerDashboardPage';
-import OrganizerPlaceholderPage from './pages/OrganizerPlaceholderPage';
+import OrganizerBridgePage from './pages/OrganizerBridgePage';
 import OrganizerLayout from './layouts/OrganizerLayout';
 import CustomerLayout from './layouts/CustomerLayout';
 import CustomerProtectedLayout from './layouts/CustomerProtectedLayout';
@@ -34,11 +34,15 @@ function AppShell() {
         <Route index element={<OrganizerDashboardPage />} />
         <Route
           path="create-gig"
-          element={<OrganizerPlaceholderPage title="Create Gig" pageClass="es-page--organizer-create" />}
+          element={
+            <OrganizerBridgePage title="Create Gig" path="/organizer/creategig" pageClass="es-page--organizer-create" />
+          }
         />
         <Route
           path="messages"
-          element={<OrganizerPlaceholderPage title="Messages" pageClass="es-page--organizer-messages" />}
+          element={
+            <OrganizerBridgePage title="Messages" path="/organizer/message" pageClass="es-page--organizer-messages" />
+          }
         />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

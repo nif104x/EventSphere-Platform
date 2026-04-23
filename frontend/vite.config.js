@@ -21,11 +21,18 @@ export default defineConfig({
     proxy: {
       // Same-origin /api in dev → FastAPI (avoids CORS when using 127.0.0.1 vs localhost)
       '/api': apiProxy,
+      // Jinja-only FastAPI paths (do NOT proxy all `/customer` — React owns `/customer/payment/*`, etc.)
+      '/customer/chatbot': apiProxy,
+      '/customer/messages': apiProxy,
+      '/customer/message': apiProxy,
     },
   },
   preview: {
     proxy: {
       '/api': apiProxy,
+      '/customer/chatbot': apiProxy,
+      '/customer/messages': apiProxy,
+      '/customer/message': apiProxy,
     },
   },
 })

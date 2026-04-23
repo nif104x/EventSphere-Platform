@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import { getCustomerSession, clearCustomerSession } from '../customerStorage';
+import { logoutCustomer } from '../api';
 
 const linkClass = ({ isActive }) =>
   `org-sidebar__link${isActive ? ' org-sidebar__link--active' : ''}`;
@@ -17,14 +18,20 @@ const CUSTOMER_CHATBOT_HREF = (() => {
       /* fall through */
     }
   }
-  return 'http://127.0.0.1:8000/customer/chatbot';
+  // Same-origin + reverse-proxy `/customer` → FastAPI; shares `access_token` from `/api/customer/login`.
+  return '/customer/chatbot';
 })();
 
 export default function CustomerLayout() {
   const navigate = useNavigate();
   const session = getCustomerSession();
 
-  const onSignOut = () => {
+  const onSignOut = async () => {
+    try {
+      await logoutCustomer();
+    } catch {
+      /* still clear local session */
+    }
     clearCustomerSession();
     navigate('/customer/login', { replace: true });
   };

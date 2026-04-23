@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import jwt
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from sqlalchemy.orm import Session
@@ -224,13 +225,30 @@ def customer_login(body: CustomerLoginIn, db: Session = Depends(get_db)):
         data={"user_id": m["id"]},
         expires_delta=timedelta(minutes=ouath2.CUSTOMER_ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return {
+    payload = {
         "customer_id": m["id"],
         "full_name": m["full_name"],
         "username": body.username.strip(),
         "access_token": access_token,
         "token_type": "bearer",
     }
+    # Jinja routes (e.g. /customer/chatbot) read this cookie; SPA also keeps the token in localStorage.
+    resp = JSONResponse(content=payload)
+    resp.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        path="/",
+    )
+    return resp
+
+
+@router.post("/customer/logout")
+def customer_logout():
+    """Clear HttpOnly session cookie used by Jinja customer pages (chatbot, messages)."""
+    resp = JSONResponse(content={"ok": True})
+    resp.delete_cookie(key="access_token", path="/")
+    return resp
 
 
 @router.get("/organizers")
@@ -267,6 +285,7 @@ def get_services(org_id: str, db: Session = Depends(get_db)):
         SELECT id AS id, category AS category, title AS title, base_price AS base_price
         FROM service_listings
         WHERE org_id = :org_id
+          AND COALESCE(is_deleted, false) = false
     """
         ),
         {"org_id": org_id},
@@ -466,6 +485,67 @@ def _mark_orders_paid(db: Session, order_ids: List[str]) -> int:
     db.commit()
     rc = getattr(r, "rowcount", None)
     return int(rc) if rc is not None and rc >= 0 else 0
+
+
+def _maybe_confirm_events_when_fully_paid(db: Session, order_ids: List[str]) -> int:
+    """
+    When every order on an event is Paid, set event Pending → Confirmed so the customer
+    can use Mark complete (dashboard only treats Confirmed as markable).
+    """
+    ids = [str(x).strip() for x in order_ids if str(x).strip()]
+    if not ids:
+        return 0
+    ph = ", ".join(f":p{i}" for i in range(len(ids)))
+    params: dict[str, str] = {f"p{i}": ids[i] for i in range(len(ids))}
+
+    event_rows = db.execute(
+        text(f"SELECT DISTINCT eo.event_id AS event_id FROM event_orders eo WHERE eo.id IN ({ph})"),
+        params,
+    ).fetchall()
+    event_ids = [
+        dict(r._mapping).get("event_id")
+        for r in event_rows
+        if dict(r._mapping).get("event_id")
+    ]
+    n_confirmed = 0
+    for eid in event_ids:
+        agg = db.execute(
+            text(
+                """
+                SELECT COUNT(*)::int AS n_total,
+                       COUNT(*) FILTER (
+                           WHERE COALESCE(payment_status::text, '') ILIKE 'paid'
+                       )::int AS n_paid
+                FROM event_orders
+                WHERE event_id = :eid
+                """
+            ),
+            {"eid": str(eid)},
+        ).first()
+        if agg is None:
+            continue
+        m = dict(agg._mapping)
+        if int(m.get("n_total") or 0) == 0:
+            continue
+        if int(m.get("n_paid") or 0) != int(m.get("n_total") or 0):
+            continue
+        r = db.execute(
+            text(
+                """
+                UPDATE events
+                SET status = 'Confirmed'::event_status
+                WHERE id = :eid
+                  AND LOWER(TRIM(BOTH FROM status::text)) = 'pending'
+                RETURNING id
+                """
+            ),
+            {"eid": str(eid)},
+        ).first()
+        if r is not None:
+            n_confirmed += 1
+    if n_confirmed:
+        db.commit()
+    return n_confirmed
 
 
 def _coerce_stripe_metadata_value(v) -> str:
@@ -749,9 +829,11 @@ def complete_stripe_checkout_session(
 
         rows = _orders_owned_by_customer(db, customer_id, order_ids)
         if all((str(r.get("payment_status") or "").strip().lower() == "paid") for r in rows):
+            _maybe_confirm_events_when_fully_paid(db, order_ids)
             return {"ok": True, "updated": 0, "order_ids": order_ids, "already_completed": True}
         _assert_customer_orders_unpaid(db, customer_id, order_ids)
         updated = _mark_orders_paid(db, order_ids)
+        _maybe_confirm_events_when_fully_paid(db, order_ids)
         return {"ok": True, "updated": updated, "order_ids": order_ids}
     except HTTPException:
         raise
@@ -920,7 +1002,8 @@ def organizer_reviews(org_id: str, db: Session = Depends(get_db)):
             """
         SELECT vr.id AS id, vr.rating AS rating, vr.comment AS comment, vr.event_id AS event_id,
                e.event_date AS event_date,
-               COALESCE(ci.full_name, e.customer_id) AS customer_name
+               COALESCE(ci.full_name, e.customer_id) AS customer_name,
+               ci.email AS customer_email, ci.phone AS customer_phone
         FROM vendor_reviews vr
         JOIN events e ON e.id = vr.event_id AND e.org_id = :org_id
         LEFT JOIN customer_info ci ON ci.customer_id = e.customer_id
@@ -941,6 +1024,7 @@ def organizer_listings(org_id: str, db: Session = Depends(get_db)):
         text(
             """
         SELECT sl.id AS id, sl.title AS title, sl.category AS category, sl.base_price AS base_price,
+               COALESCE(sl.is_deleted, false) AS is_deleted,
                (SELECT li.image_url FROM listing_images li WHERE li.listing_id = sl.id LIMIT 1) AS image_url
         FROM service_listings sl
         WHERE sl.org_id = :org_id
@@ -953,6 +1037,7 @@ def organizer_listings(org_id: str, db: Session = Depends(get_db)):
     for r in rows:
         if r.get("base_price") is not None:
             r["base_price"] = float(r["base_price"])
+        r["is_deleted"] = bool(r.get("is_deleted"))
     return rows
 
 
@@ -1121,6 +1206,7 @@ def organizer_events(org_id: str, db: Session = Depends(get_db)):
             """
         SELECT e.id AS id, e.event_date AS event_date, e.status AS status,
                e.customer_id AS customer_id, ci.full_name AS customer_name,
+               ci.email AS customer_email, ci.phone AS customer_phone,
                eo.final_total_price AS order_total, eo.payment_status AS payment_status,
                sl.title AS service_title
         FROM events e

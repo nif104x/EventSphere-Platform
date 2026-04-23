@@ -12,18 +12,17 @@
   <body>
     <nav class="sidebar">
       <h2>EventSphere</h2>
-      <p class="role-badge">Organizer</p>
+      <p class="role-badge">Customer</p>
       <ul>
-        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-        <li><a href="{{ url_for('creategig') }}">Create Gig</a></li>
-        <li><a href="{{ url_for('message') }}" class="active">Messages</a></li>
+        <li><a href="/customer/chatbot">AI Assistant</a></li>
+        <li><a href="/customer/message" class="active">Messages</a></li>
       </ul>
     </nav>
 
     <main class="chat-container">
       <aside class="chat-sidebar">
         <div class="chat-header">
-          <h3>Active Inquiries</h3>
+          <h3>Your vendor threads</h3>
         </div>
         <div class="contact-list">
           {% for room in rooms %}
@@ -32,14 +31,13 @@
             role="button"
             tabindex="0"
             data-room-id="{{ room.id }}"
-            data-customer-label="{{ (room.customer.full_name if room.customer else room.customer_id) | e }}"
-            onclick="loadChatFromContact(this)"
+            data-vendor-label="{{ (room.organizer.company_name if room.organizer else room.org_id) | e }}"
+            onclick="loadThreadFromContact(this)"
           >
             <h4>
-              Customer: {{ room.customer.full_name if room.customer else
-              room.customer_id }}
+              {{ room.organizer.company_name if room.organizer else room.org_id }}
             </h4>
-            <p>Event ID: {{ room.event_id }}</p>
+            <p>Event: {{ room.event_id }}</p>
             <span class="time">Active</span>
           </div>
           {% endfor %}
@@ -50,12 +48,11 @@
         <div class="chat-header">
           {% if rooms %}
           <h3>
-            {{ rooms[0].customer.full_name if rooms[0].customer else
-            rooms[0].customer_id }}
+            {{ rooms[0].organizer.company_name if rooms[0].organizer else rooms[0].org_id }}
             <span>(Room: {{ rooms[0].id }})</span>
           </h3>
           {% else %}
-          <h3>No Active Chats</h3>
+          <h3>No conversations yet</h3>
           {% endif %}
         </div>
 
@@ -79,72 +76,48 @@
     </main>
 
     <script>
-      // Global variable so your sendMessage() function knows where to send new texts
       let activeRoomId = null;
 
-      function loadChatFromContact(el) {
+      function loadThreadFromContact(el) {
         const roomId = el.dataset.roomId;
-        const customerLabel = el.dataset.customerLabel || "Customer";
-        loadChat(roomId, customerLabel, el);
+        const label = el.dataset.vendorLabel || "Vendor";
+        loadChat(roomId, label, el);
       }
 
-      async function loadChat(roomId, customerName, clickedElement) {
-        // 1. Update global variable
+      async function loadChat(roomId, vendorLabel, clickedElement) {
         activeRoomId = roomId;
+        document.querySelectorAll(".contact").forEach((e) => e.classList.remove("active"));
+        if (clickedElement) clickedElement.classList.add("active");
 
-        // 2. Update Sidebar Styling (Move the dark gray 'active' highlight)
-        document
-          .querySelectorAll(".contact")
-          .forEach((el) => el.classList.remove("active"));
-        if (clickedElement) {
-          clickedElement.classList.add("active");
-        }
-
-        // 3. Update Chat Header
         const headerH3 = document.querySelector(".chat-window .chat-header h3");
         if (headerH3) {
-          headerH3.innerHTML = `${customerName} <span>(Room: ${roomId})</span>`;
+          headerH3.innerHTML = `${vendorLabel} <span>(Room: ${roomId})</span>`;
         }
-
-        // 4. Show the text input area now that a room is selected
         const inputArea = document.querySelector(".chat-input-area");
-        if (inputArea) {
-          inputArea.style.display = "flex"; // or 'block' depending on your CSS
-        }
+        if (inputArea) inputArea.style.display = "flex";
 
-        // 5. Fetch the chat history from FastAPI
         const area = document.getElementById("msgArea");
         area.innerHTML =
           "<p style='text-align:center; color:gray;'>Loading messages...</p>";
 
         try {
-          const response = await fetch(`/organizer/messages/${roomId}`);
-
-          // Catch authentication or server errors before parsing JSON
-          if (!response.ok) {
-            throw new Error(`HTTP Error: ${response.status}`);
-          }
-
+          const response = await fetch(`/customer/messages/${roomId}`, {
+            credentials: "include",
+          });
+          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           const data = await response.json();
-
-          area.innerHTML = ""; // Clear the loading text
-
-          // 6. Draw the messages
+          area.innerHTML = "";
           if (!data.messages || data.messages.length === 0) {
             area.innerHTML =
               "<p style='text-align:center; color:gray;'>No messages yet. Say hi!</p>";
           } else {
             data.messages.forEach((msg) => {
               const msgDiv = document.createElement("div");
-              msgDiv.className = msg.is_mine
-                ? "message sent"
-                : "message received";
+              msgDiv.className = msg.is_mine ? "message sent" : "message received";
               msgDiv.innerHTML = `<p>${msg.text}</p><span class="timestamp">${msg.time}</span>`;
               area.appendChild(msgDiv);
             });
           }
-
-          // Scroll to the bottom
           area.scrollTop = area.scrollHeight;
         } catch (error) {
           console.error("Error loading chat:", error);
@@ -152,38 +125,31 @@
         }
       }
 
-      // The background POST request for sending a new message
       async function sendMessage() {
         const input = document.getElementById("msgInput");
         const area = document.getElementById("msgArea");
         const text = input.value.trim();
+        if (text === "" || !activeRoomId) return;
 
-        if (text === "" || !activeRoomId) return; // Prevent sending empty messages
-
-        // Pack the data for FastAPI
         const formData = new FormData();
         formData.append("room_id", activeRoomId);
         formData.append("text", text);
 
         try {
-          const response = await fetch("/organizer/message", {
+          const response = await fetch("/customer/message", {
             method: "POST",
             body: formData,
+            credentials: "include",
           });
-
           if (response.ok) {
-            // Draw the new bubble immediately
             const msgDiv = document.createElement("div");
             msgDiv.className = "message sent";
-
             const now = new Date();
             const timeString = now.toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
             });
-
             msgDiv.innerHTML = `<p>${text}</p><span class="timestamp">${timeString}</span>`;
-
             area.appendChild(msgDiv);
             input.value = "";
             area.scrollTop = area.scrollHeight;
@@ -195,22 +161,18 @@
         }
       }
 
-      // Send on Enter key
       document
         .getElementById("msgInput")
         .addEventListener("keypress", function (e) {
           if (e.key === "Enter") sendMessage();
         });
 
-      // Auto-click the first contact when the page loads, or hide input if no contacts
       window.onload = () => {
         const firstContact = document.querySelector(".contact");
         const inputArea = document.querySelector(".chat-input-area");
-
         if (firstContact) {
           firstContact.click();
         } else if (inputArea) {
-          // Hide the send text area if there's no chat window yet
           inputArea.style.display = "none";
         }
       };

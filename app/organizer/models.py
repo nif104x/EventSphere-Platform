@@ -93,6 +93,7 @@ class ServiceListing(Base):
     category = Column(String(50), nullable=False)
     title = Column(String(150), nullable=False)
     base_price = Column(Numeric(10, 2), nullable=False)
+    is_deleted = Column(Boolean, nullable=True, default=False)
 
     # RELATIONSHIPS: One listing has many images and many addons
     images = relationship("ListingImage", backref="listing", cascade="all, delete-orphan")
@@ -204,7 +205,10 @@ class ChatRoom(Base):
     customer_id = Column(String(50), ForeignKey('customer_info.customer_id'))
     org_id = Column(String(50), ForeignKey('organizer_info.org_id'))
     event_id = Column(String(50), ForeignKey('events.id', ondelete='CASCADE'))
-    
+
+    customer = relationship("CustomerInfo", foreign_keys=[customer_id])
+    organizer = relationship("OrganizerInfo", foreign_keys=[org_id])
+
     # RELATIONSHIP: One room has many messages
     messages = relationship("Message", backref="room", cascade="all, delete-orphan")
 

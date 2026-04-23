@@ -1,7 +1,8 @@
 from typing import Optional
 
 from fastapi import HTTPException, status, Depends, APIRouter
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
 
 from app.organizer.database import get_db
 from app.organizer import models, ouath2
@@ -92,9 +93,12 @@ def message(request: Request,
             current_user: models.CustomerInfo=Depends(get_current_customer_user)
 ):
     
-    rooms = db.query(models.ChatRoom).filter(
-        models.ChatRoom.customer_id == current_user.customer_id
-    ).all()
+    rooms = (
+        db.query(models.ChatRoom)
+        .options(joinedload(models.ChatRoom.organizer))
+        .filter(models.ChatRoom.customer_id == current_user.customer_id)
+        .all()
+    )
 
     return templates.TemplateResponse(
         request, 
@@ -178,15 +182,17 @@ def chat(
         clean_history = []
         for chat in past_chats:
             if isinstance(chat.ai_response, dict):
-                ai_text = chat.ai_response.get("reply", "Error: No reply text found.")
+                ai_payload = chat.ai_response
             else:
-                ai_text = str(chat.ai_response)
-            
-            clean_history.append({
-                 "query_text": chat.query_text,
-                 "ai_text": chat.ai_response,
-                 "time": chat.timestamp.strftime('%I:%M %p') if chat.timestamp else ""
-            })
+                ai_payload = {"reply": str(chat.ai_response)}
+
+            clean_history.append(
+                {
+                    "query_text": chat.query_text,
+                    "ai_text": ai_payload,
+                    "time": chat.timestamp.strftime("%I:%M %p") if chat.timestamp else "",
+                }
+            )
 
         return templates.TemplateResponse(
             request,
@@ -247,7 +253,16 @@ def chat_res(
 
 #############################
 def get_service_listings_dict(db: Session):
-    listings = db.query(models.ServiceListing).all()
+    listings = (
+        db.query(models.ServiceListing)
+        .filter(
+            or_(
+                models.ServiceListing.is_deleted.is_(False),
+                models.ServiceListing.is_deleted.is_(None),
+            )
+        )
+        .all()
+    )
     
     listings_dict = {}
     

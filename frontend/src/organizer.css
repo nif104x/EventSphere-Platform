@@ -557,6 +557,10 @@ a.org-btn--link {
   color: var(--org-text-muted);
 }
 
+.org-gig-card__status--removed {
+  color: #b45309;
+}
+
 /* Reviews */
 .org-review-list {
   display: flex;
