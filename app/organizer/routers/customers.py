@@ -137,8 +137,28 @@ def chat_res(request:Request,
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
-            {"role": "system", "content": "You are a helpful event gigs recommendation chatbot."},
-            {"role": "user", "content": f"User query: {query_text}\n\nProduct data: {services}\n\n Direction: If the user is not asking about event services, respond naturally as a casual EventSphere assistant; if they do request services, provide the most relevant and complete answer including required details like organization ID, company name, and any other necessary information to help the customer clearly understand the next steps."}
+            {
+                "role": "system",
+                "content": (
+                    "You are an EventSphere assistant.\n"
+                    "- If NOT event-related → reply casually in 1-2 lines.\n"
+                    "- If event-related → respond in this format:\n"
+                    "Title:\n"
+                    "Services:\n"
+                    "- ...\n"
+                    "Steps:\n"
+                    "1. ...\n"
+                    "2. ...\n"
+                    "Company Details:\n"
+                    "- Name:\n"
+                    "- Org ID:\n"
+                    "Keep it short, no paragraphs."
+                )
+            },
+            {
+                "role": "user",
+                "content": f"Query: {query_text}\n\nServices Data:\n{services}"
+            }
         ],
         temperature=0.7
     )
