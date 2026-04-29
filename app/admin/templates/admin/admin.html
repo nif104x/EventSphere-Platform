@@ -216,8 +216,11 @@
 
       const params = new URLSearchParams(window.location.search);
       const initial = params.get("tab");
+      const initialFromServer = "{{ initial_tab if initial_tab is defined else '' }}";
       if (initial === "orders" || initial === "users" || initial === "listings") {
         showTab(initial);
+      } else if (initialFromServer === "orders" || initialFromServer === "users" || initialFromServer === "listings") {
+        showTab(initialFromServer);
       } else {
         showTab("listings");
       }
