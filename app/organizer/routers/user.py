@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, status, Response, Depends, APIRouter
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from app.organizer.database import get_db
 from app.organizer import models, schemas, utils, ouath2, database
@@ -33,10 +33,18 @@ router = APIRouter(
 def dashboard_page(request: Request, current_user: models.OrganizerInfo = Depends(ouath2.get_current_user), db: Session=Depends(get_db)):
     analytics = db.query(models.VendorAnalytics).filter(models.VendorAnalytics.org_id==current_user.org_id).first()
     
-    orders_pending = db.query(models.Event).filter(
-        models.Event.org_id == current_user.org_id,
-        models.Event.status == "Pending"
-    ).all()
+    orders_pending = (
+        db.query(models.Event)
+        .options(
+            joinedload(models.Event.customer),
+            joinedload(models.Event.order).joinedload(models.EventOrder.listing),
+        )
+        .filter(
+            models.Event.org_id == current_user.org_id,
+            models.Event.status == models.EventStatusEnum.Pending,
+        )
+        .all()
+    )
 
     gigs = db.query(models.ServiceListing).options(
         joinedload(models.ServiceListing.images)
@@ -50,12 +58,47 @@ def dashboard_page(request: Request, current_user: models.OrganizerInfo = Depend
     
     display_rating = round(average_rating, 1) if average_rating else "0.0"
 
-    completed = db.query(models.Event).options(
-        joinedload(models.Event.order) 
-    ).filter(
-        models.Event.org_id == current_user.org_id,
-        models.Event.status == "Completed" 
-    ).all()
+    completed = (
+        db.query(models.Event)
+        .options(
+            joinedload(models.Event.order),
+            joinedload(models.Event.customer),
+        )
+        .filter(
+            models.Event.org_id == current_user.org_id,
+            models.Event.status == models.EventStatusEnum.Completed,
+        )
+        .all()
+    )
+
+    review_rows = (
+        db.query(
+            models.VendorReview,
+            models.Event.event_date,
+            models.CustomerInfo.full_name,
+            models.Event.customer_id,
+            models.CustomerInfo.email,
+            models.CustomerInfo.phone,
+        )
+        .join(models.Event, models.Event.id == models.VendorReview.event_id)
+        .outerjoin(models.CustomerInfo, models.CustomerInfo.customer_id == models.Event.customer_id)
+        .filter(models.VendorReview.vendor_id == current_user.org_id)
+        .order_by(models.Event.event_date.desc().nullslast(), models.VendorReview.id.desc())
+        .limit(25)
+        .all()
+    )
+    recent_reviews = [
+        {
+            "rating": int(vr.rating or 0),
+            "comment": (vr.comment or "").strip(),
+            "event_date": ev_dt,
+            "customer_name": (fn or cid or "Customer"),
+            "event_id": vr.event_id,
+            "customer_email": em,
+            "customer_phone": ph,
+        }
+        for vr, ev_dt, fn, cid, em, ph in review_rows
+    ]
 
     return templates.TemplateResponse(
         request=request, 
@@ -67,9 +110,69 @@ def dashboard_page(request: Request, current_user: models.OrganizerInfo = Depend
             "analytics": analytics, 
             "pending": orders_pending,
             "rating": display_rating,
-            "completed": completed
+            "completed": completed,
+            "recent_reviews": recent_reviews,
         }
     )
+
+
+@router.post(
+    "/pending-event-action",
+    name="organizer_pending_event_action",
+    include_in_schema=False,
+)
+def organizer_pending_event_action(
+    request: Request,
+    event_id: str = Form(...),
+    action: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: models.OrganizerInfo = Depends(ouath2.get_current_user),
+):
+    """Confirm or decline a pending event for the signed-in organizer (Jinja cookie session)."""
+    aid = (action or "").strip().lower()
+    if aid not in ("confirm", "decline"):
+        raise HTTPException(status_code=400, detail="action must be confirm or decline")
+    eid = (event_id or "").strip()
+    if not eid:
+        raise HTTPException(status_code=400, detail="event_id required")
+    row = db.execute(
+        text(
+            """
+        SELECT id, status::text AS status FROM events
+        WHERE id = :event_id AND org_id = :org_id
+    """
+        ),
+        {"event_id": eid, "org_id": current_user.org_id},
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Event not found for this organizer")
+    m = dict(row._mapping)
+    if m.get("status") != "Pending":
+        raise HTTPException(
+            status_code=400, detail="Only pending events can be confirmed or declined"
+        )
+    if aid == "confirm":
+        db.execute(
+            text(
+                """
+            UPDATE events SET status = 'Confirmed'::event_status
+            WHERE id = :event_id AND org_id = :org_id
+        """
+            ),
+            {"event_id": eid, "org_id": current_user.org_id},
+        )
+    else:
+        db.execute(
+            text(
+                """
+            UPDATE events SET status = 'Cancelled'::event_status
+            WHERE id = :event_id AND org_id = :org_id
+        """
+            ),
+            {"event_id": eid, "org_id": current_user.org_id},
+        )
+    db.commit()
+    return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 
 
@@ -95,7 +198,8 @@ def handle_create_gig(
         org_id=current_user.org_id,
         title = form.title,
         category=form.category,
-        base_price = form.base_price
+        base_price = form.base_price,
+        is_deleted=False,
     )
     db.add(new_gig)
     image_id = f"IMG-{uuid.uuid4().hex[:6].upper()}"
@@ -131,9 +235,12 @@ def message(request: Request,
             db: Session=Depends(get_db),
             current_user: models.OrganizerInfo=Depends(ouath2.get_current_user)
 ):
-    rooms = db.query(models.ChatRoom).filter(
-        models.ChatRoom.org_id == current_user.org_id
-    ).all()
+    rooms = (
+        db.query(models.ChatRoom)
+        .options(joinedload(models.ChatRoom.customer))
+        .filter(models.ChatRoom.org_id == current_user.org_id)
+        .all()
+    )
 
     return templates.TemplateResponse(
         request, 
@@ -149,7 +256,17 @@ def get_room_messages(
     db: Session = Depends(get_db),
     current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)
 ):
-    
+    room = (
+        db.query(models.ChatRoom)
+        .filter(
+            models.ChatRoom.id == room_id,
+            models.ChatRoom.org_id == current_user.org_id,
+        )
+        .first()
+    )
+    if room is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+
     messages = db.query(models.Message).filter(
         models.Message.room_id == room_id
     ).order_by(models.Message.timestamp.asc()).all()
@@ -174,6 +291,16 @@ def organizer_send_message(
     db: Session = Depends(get_db),
     current_user: models.OrganizerInfo = Depends(ouath2.get_current_user)
 ):
+    room = (
+        db.query(models.ChatRoom)
+        .filter(
+            models.ChatRoom.id == room_id,
+            models.ChatRoom.org_id == current_user.org_id,
+        )
+        .first()
+    )
+    if room is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
     # Pass the organizer's ID as the sender
     saved_msg = save_chat_message(
         db=db, 
@@ -236,12 +363,13 @@ from datetime import timedelta
 
 @router.post("/login", name="login_post")
 def login(request:Request, username:str=Form(...), password: str = Form(...), db: Session=Depends(database.get_db)):
-    
+    username = (username or "").strip()
+    password = (password or "").strip()
     user = db.query(models.UserMain).filter(models.UserMain.username==username).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invalid credential")
     
-    if user.password != password:
+    if not utils.password_matches_stored(password, user.password):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invalid credential")
 
     access_token = ouath2.create_access_token(

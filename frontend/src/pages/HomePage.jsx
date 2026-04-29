@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import OrganizerCard from '../components/OrganizerCard';
 import { getOrganizers } from '../api';
 
@@ -52,7 +52,9 @@ const HomePage = () => {
           <span className="es-home-hero__eyebrow">Step 1 · Customer</span>
           <h1 className="es-page-title">Choose your organizers</h1>
           <p className="muted es-home-hero__desc">
-            Select one or more vendors, then continue to pick services, add-ons, and your event date.
+            Select one or more vendors, then continue to pick services, add-ons, and your event date. After the vendor
+            confirms, open <Link to="/dashboard">My dashboard</Link> to <strong>mark the event complete</strong>, then
+            leave a rating.
           </p>
         </header>
         <aside className="es-home-aside" aria-label="Selection summary">
@@ -64,6 +66,9 @@ const HomePage = () => {
             <button type="button" className="btn primary" onClick={goToBooking} disabled={selectedIds.size === 0}>
               Continue to booking ({selectedIds.size} selected)
             </button>
+            <Link to="/dashboard" className="btn small">
+              My dashboard
+            </Link>
           </div>
         </aside>
       </div>

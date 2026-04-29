@@ -402,6 +402,12 @@ a.org-btn--link {
   color: var(--org-text-heading);
 }
 
+.org-panel__lede {
+  margin: -0.35rem 0 1rem;
+  max-width: 48rem;
+  line-height: 1.5;
+}
+
 .org-pill {
   font-size: 0.75rem;
   font-weight: 600;
@@ -549,6 +555,10 @@ a.org-btn--link {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--org-text-muted);
+}
+
+.org-gig-card__status--removed {
+  color: #b45309;
 }
 
 /* Reviews */

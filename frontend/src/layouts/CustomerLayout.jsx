@@ -1,21 +1,43 @@
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { getBackendOrigin } from '../backendOrigin';
 import { getCustomerSession, clearCustomerSession } from '../customerStorage';
+import { logoutCustomer } from '../api';
 
 const linkClass = ({ isActive }) =>
   `org-sidebar__link${isActive ? ' org-sidebar__link--active' : ''}`;
+
+/** Jinja chatbot on FastAPI (cookie session), not the React SPA. */
+const CUSTOMER_CHATBOT_HREF = (() => {
+  const explicit = import.meta.env.VITE_CHATBOT_URL;
+  if (explicit) return String(explicit).replace(/\/$/, '');
+  const apiBase = import.meta.env.VITE_API_BASE;
+  if (apiBase && /^https?:\/\//i.test(String(apiBase))) {
+    try {
+      const u = new URL(String(apiBase).replace(/\/$/, ''));
+      return `${u.origin}/customer/chatbot`;
+    } catch {
+      /* fall through */
+    }
+  }
+  // Same-origin + reverse-proxy `/customer` → FastAPI; shares `access_token` from `/api/customer/login`.
+  return '/customer/chatbot';
+})();
 
 export default function CustomerLayout() {
   const navigate = useNavigate();
   const session = getCustomerSession();
 
-  const onSignOut = () => {
+  const onSignOut = async () => {
+    try {
+      await logoutCustomer();
+    } catch {
+      /* still clear local session */
+    }
     clearCustomerSession();
     navigate('/customer/login', { replace: true });
   };
 
   return (
-    <div className="org-shell">
+    <div className="org-shell org-shell--customer">
       <aside className="org-sidebar" aria-label="Customer navigation">
         <div className="org-sidebar__brand">EventSphere</div>
         <div className="org-sidebar__badge">Customer</div>
@@ -29,6 +51,20 @@ export default function CustomerLayout() {
           <NavLink to="/dashboard" className={linkClass}>
             My dashboard
           </NavLink>
+          <NavLink to="/customer/history" className={linkClass}>
+            Events & ratings
+          </NavLink>
+          <NavLink to="/customer/chat" className={linkClass}>
+            Messages
+          </NavLink>
+          <a
+            href={CUSTOMER_CHATBOT_HREF}
+            className="org-sidebar__link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Chatbot
+          </a>
         </nav>
         <div className="org-sidebar__foot">
           <div className="org-sidebar__account">
@@ -43,13 +79,6 @@ export default function CustomerLayout() {
           <Link to="/" className="org-sidebar__foot-link">
             ← Portal hub
           </Link>
-          <a
-            href={`${getBackendOrigin()}/organizer/login`}
-            className="org-sidebar__foot-link"
-            rel="noopener noreferrer"
-          >
-            Organizer (Jinja) ↗
-          </a>
         </div>
       </aside>
       <div className="org-main">

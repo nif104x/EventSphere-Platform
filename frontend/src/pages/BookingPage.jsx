@@ -1,7 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { getServices, getAddons, createEvent, createOrder } from '../api';
-import { getCustomerId } from '../customerStorage';
+
+function formatApiError(err) {
+  const d = err?.response?.data?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    return d.map((x) => (typeof x === 'string' ? x : x?.msg || JSON.stringify(x))).join(' ');
+  }
+  return err?.message || 'Request failed';
+}
 
 const emptyBlock = () => ({
   services: [],
@@ -106,7 +114,6 @@ const BookingPage = () => {
       alert('Choose an event date.');
       return;
     }
-    const customerId = getCustomerId();
     for (const o of organizers) {
       const b = byOrg[o.org_id];
       if (!b?.selectedService) {
@@ -117,6 +124,7 @@ const BookingPage = () => {
 
     setSubmitting(true);
     try {
+      const lines = [];
       for (const o of organizers) {
         const b = byOrg[o.org_id];
         const svc = b.services.find((s) => s.id === b.selectedService);
@@ -128,23 +136,30 @@ const BookingPage = () => {
         const totalPrice = base + addonsTotal;
 
         const eventRes = await createEvent({
-          customer_id: customerId,
           org_id: o.org_id,
           event_date: eventDate,
         });
-        await createOrder({
+        const orderRes = await createOrder({
           event_id: eventRes.data.event_id,
           listing_id: svc.id,
           base_price: base,
           addons_cost: addonsTotal,
           total_price: totalPrice,
         });
+        lines.push({
+          order_id: orderRes.data.order_id,
+          event_id: eventRes.data.event_id,
+          amount: totalPrice,
+          company_name: o.company_name,
+        });
       }
-      alert(`Booking confirmed! Total: $${grandTotal.toFixed(2)}`);
-      navigate('/dashboard');
+      navigate('/customer/payment', {
+        replace: true,
+        state: { lines, grandTotal },
+      });
     } catch (err) {
       console.error(err);
-      alert('Booking failed. Check the API and database.');
+      alert(`Booking failed: ${formatApiError(err)}`);
     }
     setSubmitting(false);
   };
@@ -272,7 +287,7 @@ const BookingPage = () => {
           <div className="booking-footer es-book-aside__summary">
             <p className="grand-total">Grand total: ${grandTotal.toFixed(2)}</p>
             <button type="button" className="btn primary" disabled={!ready || submitting} onClick={handleBook}>
-              {submitting ? 'Confirming…' : 'Confirm order'}
+              {submitting ? 'Creating booking…' : 'Confirm order & pay'}
             </button>
           </div>
         </aside>

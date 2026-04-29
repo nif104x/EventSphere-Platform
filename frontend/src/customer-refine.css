@@ -1,0 +1,87 @@
+/*
+ * Customer portal polish — same shell / sidebar / canvas as organizer.css.
+ * Scoped under .org-shell--customer only.
+ */
+
+.org-shell--customer .org-sidebar__badge {
+  background: linear-gradient(135deg, #0e7490, #14b8a6);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+
+.org-shell--customer .org-main .page-wrap,
+.org-shell--customer .org-main .org-page {
+  max-width: 1120px;
+}
+
+.org-shell--customer .page-header {
+  margin-bottom: 1.35rem;
+}
+
+.org-shell--customer .es-page-title {
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  color: var(--org-text-heading, #0f172a);
+}
+
+.org-shell--customer .muted,
+.org-shell--customer .org-muted {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.org-shell--customer .es-home-hero,
+.org-shell--customer .es-home-aside,
+.org-shell--customer .es-book-intro,
+.org-shell--customer .dash-panel,
+.org-shell--customer .es-chat__layout,
+.org-shell--customer .es-history-table-wrap {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.org-shell--customer .es-home-chip {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.org-shell--customer .es-page--home .org-card--selected {
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+
+.org-shell--customer .dash-panel h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--org-text-heading, #0f172a);
+  margin: 0 0 0.75rem;
+  letter-spacing: -0.02em;
+}
+
+.org-shell--customer .dash-row {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.org-shell--customer .dash-row:last-child {
+  border-bottom: none;
+}
+
+.org-shell--customer .error-banner {
+  border-radius: var(--org-radius, 10px);
+  border: 1px solid #fecaca;
+  border-left-width: 4px;
+  border-left-color: #ef4444;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  color: #991b1b;
+  margin-bottom: 1rem;
+}
+
+.org-shell--customer .btn.small {
+  border-radius: var(--org-radius, 10px);
+  font-weight: 600;
+}
+
+.org-shell--customer .org-sidebar__foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: auto;
+  padding-top: 1rem;
+}

@@ -68,20 +68,43 @@
               </tr>
             </thead>
             <tbody>
-              {% for item in pending %}
+              {% if pending|length == 0 %}
               <tr>
-                <td>{{ item.id }}</td>
-
-                <td>{{ item.customer_name }}</td>
+                <td colspan="6" style="text-align: center; color: #666">
+                  No pending orders.
+                </td>
+              </tr>
+              {% endif %} {% for item in pending %}
+              <tr>
+                <td>{{ item.order.id if item.order else item.id }}</td>
 
                 <td>
-                  {{ item.created_at.strftime('%b %d, %Y') if item.created_at
+                  {{ item.customer.full_name if item.customer else
+                  item.customer_id }} {% if item.customer and
+                  (item.customer.email or item.customer.phone) %}
+                  <div style="font-size: 0.85em; color: #666; margin-top: 4px">
+                    {% if item.customer.email %}{{ item.customer.email }}{%
+                    endif %} {% if item.customer.email and item.customer.phone %}
+                    · {% endif %} {% if item.customer.phone %}{{
+                    item.customer.phone }}{% endif %}
+                  </div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {{ item.event_date.strftime('%b %d, %Y') if item.event_date
                   else "N/A" }}
                 </td>
 
-                <td>{{ item.event_name }}</td>
+                <td>
+                  {{ item.order.listing.title if item.order and item.order.listing
+                  else "N/A" }}
+                </td>
 
-                <td>${{ "{:,.2f}".format(item.final_total_price or 0.0) }}</td>
+                <td>
+                  ${{ "{:,.2f}".format(item.order.final_total_price or 0.0) if
+                  item.order else "0.00" }}
+                </td>
 
                 <td>
                   <div class="action-buttons">
@@ -124,7 +147,7 @@
               {% endif %}
 
               <div class="gig-info">
-                <span class="category">{{ gig.primary_category }}</span>
+                <span class="category">{{ gig.category }}</span>
 
                 <h4>{{ gig.title }}</h4>
 
@@ -132,9 +155,9 @@
                   From ${{ "{:,.2f}".format(gig.base_price) }}
                 </p>
 
-                {% if gig.is_active %}
-                <span class="status-dot active"></span> Live {% else %}
-                <span class="status-dot inactive"></span> Paused {% endif %}
+                {% if gig.is_deleted %}
+                <span class="status-dot inactive"></span> Removed {% else %}
+                <span class="status-dot active"></span> Active {% endif %}
               </div>
             </div>
             {% endfor %}
@@ -144,28 +167,35 @@
         <section class="dashboard-section">
           <h2>Recent Reviews</h2>
           <div class="reviews-list">
+            {% if recent_reviews|length == 0 %}
+            <p style="color: #666">No reviews yet.</p>
+            {% endif %} {% for r in recent_reviews %}
             <div class="review-card">
               <div class="review-header">
-                <span class="stars">★★★★★</span>
-                <span class="date">May 12, 2026</span>
+                <span class="stars">
+                  {% for n in range(1, 6) %} {% if n <= r.rating %}★{% else %}☆{%
+                  endif %} {% endfor %}
+                </span>
+                <span class="date">
+                  {{ r.event_date.strftime('%b %d, %Y') if r.event_date else
+                  '—' }}
+                </span>
               </div>
               <p class="comment">
-                "Incredible floral arrangements, completely transformed the
-                venue! Highly recommend Awesome Events."
+                {% if r.comment %} "{{ r.comment }}" {% else %} — {% endif %}
               </p>
-              <p class="reviewer">- Jessica W. (EVT-8832)</p>
-            </div>
-            <div class="review-card">
-              <div class="review-header">
-                <span class="stars">★★★★☆</span>
-                <span class="date">Apr 28, 2026</span>
-              </div>
-              <p class="comment">
-                "Sound system was crystal clear. Setup was a bit delayed but
-                overall great service."
+              <p class="reviewer">
+                - {{ r.customer_name }} ({{ r.event_id }})
               </p>
-              <p class="reviewer">- David L. (EVT-8710)</p>
+              {% if r.customer_email or r.customer_phone %}
+              <p style="font-size: 0.85em; color: #666; margin: 0.25rem 0 0">
+                {% if r.customer_email %}{{ r.customer_email }}{% endif %} {%
+                if r.customer_email and r.customer_phone %} · {% endif %} {%
+                if r.customer_phone %}{{ r.customer_phone }}{% endif %}
+              </p>
+              {% endif %}
             </div>
+            {% endfor %}
           </div>
         </section>
       </div>
@@ -184,7 +214,13 @@
               </tr>
             </thead>
             <tbody>
-              {% for item in completed %}
+              {% if completed|length == 0 %}
+              <tr>
+                <td colspan="5" style="text-align: center; color: #666">
+                  No completed events yet.
+                </td>
+              </tr>
+              {% endif %} {% for item in completed %}
               <tr>
                 <td>{{ item.id }}</td>
 
@@ -193,7 +229,18 @@
                   else "N/A" }}
                 </td>
 
-                <td>{{ item.customer_id }}</td>
+                <td>
+                  {{ item.customer.full_name if item.customer else item.customer_id
+                  }} {% if item.customer and (item.customer.email or
+                  item.customer.phone) %}
+                  <div style="font-size: 0.85em; color: #666; margin-top: 4px">
+                    {% if item.customer.email %}{{ item.customer.email }}{%
+                    endif %} {% if item.customer.email and item.customer.phone %}
+                    · {% endif %} {% if item.customer.phone %}{{
+                    item.customer.phone }}{% endif %}
+                  </div>
+                  {% endif %}
+                </td>
 
                 <td>
                   <span class="status completed">{{ item.status.value }}</span>
@@ -211,5 +258,28 @@
         </div>
       </section>
     </main>
+    <form
+      method="post"
+      action="{{ url_for('organizer_pending_event_action') }}"
+      id="organizerPendingActionForm"
+      style="display: none"
+    >
+      <input type="hidden" name="event_id" id="organizerPendingEventId" />
+      <input type="hidden" name="action" id="organizerPendingAction" />
+    </form>
+    <script>
+      function updateStatus(eventId, action) {
+        const normalized =
+          action === "confirmed"
+            ? "confirm"
+            : action === "declined"
+              ? "decline"
+              : action;
+        if (normalized !== "confirm" && normalized !== "decline") return;
+        document.getElementById("organizerPendingEventId").value = eventId;
+        document.getElementById("organizerPendingAction").value = normalized;
+        document.getElementById("organizerPendingActionForm").submit();
+      }
+    </script>
   </body>
 </html>

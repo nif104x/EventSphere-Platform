@@ -1,17 +1,18 @@
-from fastapi import FastAPI, HTTPException, status, Response, Depends, APIRouter
+from typing import Optional
+
+from fastapi import HTTPException, status, Depends, APIRouter
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
 
 from app.organizer.database import get_db
-from app.organizer import models, schemas, utils, ouath2, database
-from app.organizer.routers import auth
+from app.organizer import models, ouath2
 
 import uuid
 
 # For jinja2 templates
 from fastapi import Request, Form
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 
 
 templates = Jinja2Templates(directory="app/organizer/templates")
@@ -22,15 +23,82 @@ router = APIRouter(
     tags = ["customer"]
 )
 
+
+def get_current_customer_user(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> models.CustomerInfo:
+    """
+    Cookie JWT auth for Jinja customer flows (same `access_token` cookie as organizer login).
+    Resolves `CustomerInfo` only when `user_main.role` is Customer — not for organizer tokens.
+    """
+    token_cookie = request.cookies.get("access_token")
+    if not token_cookie or not str(token_cookie).startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authorized - No Cookie Found",
+        )
+    token = str(token_cookie).split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+        )
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+
+    token_data = ouath2.verify_access_token(token, credentials_exception)
+    uid = str(token_data.id)
+
+    user = db.query(models.UserMain).filter(models.UserMain.id == uid).first()
+    if user is None:
+        raise credentials_exception
+
+    if user.role != models.RoleEnum.Customer:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer session required",
+        )
+
+    customer = (
+        db.query(models.CustomerInfo)
+        .filter(models.CustomerInfo.customer_id == uid)
+        .first()
+    )
+    if customer is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Customer profile not found",
+        )
+    return customer
+
+
+def _room_for_customer(db: Session, room_id: str, customer_id: str) -> Optional[models.ChatRoom]:
+    return (
+        db.query(models.ChatRoom)
+        .filter(
+            models.ChatRoom.id == room_id,
+            models.ChatRoom.customer_id == customer_id,
+        )
+        .first()
+    )
+
+
 @router.get("/message", name="message", include_in_schema=False)
 def message(request: Request,
             db: Session=Depends(get_db),
-            current_user: models.CustomerInfo=Depends(ouath2.get_current_user)
+            current_user: models.CustomerInfo=Depends(get_current_customer_user)
 ):
     
-    rooms = db.query(models.ChatRoom).filter(
-        models.ChatRoom.customer_id == current_user.customer_id
-    ).all()
+    rooms = (
+        db.query(models.ChatRoom)
+        .options(joinedload(models.ChatRoom.organizer))
+        .filter(models.ChatRoom.customer_id == current_user.customer_id)
+        .all()
+    )
 
     return templates.TemplateResponse(
         request, 
@@ -43,8 +111,11 @@ def message(request: Request,
 def get_room_messages(
     room_id: str, 
     db: Session = Depends(get_db),
-    current_user: models.CustomerInfo = Depends(ouath2.get_current_user)
+    current_user: models.CustomerInfo = Depends(get_current_customer_user)
 ):
+    if _room_for_customer(db, room_id, current_user.customer_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
+
     messages = db.query(models.Message).filter(
         models.Message.room_id == room_id
     ).order_by(models.Message.timestamp.asc()).all()
@@ -68,8 +139,10 @@ def customer_send_message(
     room_id: str = Form(...),
     text: str = Form(...),
     db: Session = Depends(get_db),
-    current_user: models.CustomerInfo = Depends(ouath2.get_current_user)
+    current_user: models.CustomerInfo = Depends(get_current_customer_user)
 ):
+    if _room_for_customer(db, room_id, current_user.customer_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
 
     saved_msg = save_chat_message(
         db=db, 
@@ -94,21 +167,32 @@ client = Groq(
 )
 
 @router.get("/chatbot", response_class=HTMLResponse)
-def chat(request: Request, db: Session=Depends(get_db)):
-        past_chats = db.query(models.ChatbotInteraction).filter(models.ChatbotInteraction.customer_id=="CUST-01").order_by(models.ChatbotInteraction.timestamp.asc()).all()
+def chat(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.CustomerInfo = Depends(get_current_customer_user),
+):
+        past_chats = (
+            db.query(models.ChatbotInteraction)
+            .filter(models.ChatbotInteraction.customer_id == current_user.customer_id)
+            .order_by(models.ChatbotInteraction.timestamp.asc())
+            .all()
+        )
 
         clean_history = []
         for chat in past_chats:
             if isinstance(chat.ai_response, dict):
-                ai_text = chat.ai_response.get("reply", "Error: No reply text found.")
+                ai_payload = chat.ai_response
             else:
-                ai_text = str(chat.ai_response)
-            
-            clean_history.append({
-                 "query_text": chat.query_text,
-                 "ai_text": chat.ai_response,
-                 "time": chat.timestamp.strftime('%I:%M %p') if chat.timestamp else ""
-            })
+                ai_payload = {"reply": str(chat.ai_response)}
+
+            clean_history.append(
+                {
+                    "query_text": chat.query_text,
+                    "ai_text": ai_payload,
+                    "time": chat.timestamp.strftime("%I:%M %p") if chat.timestamp else "",
+                }
+            )
 
         return templates.TemplateResponse(
             request,
@@ -119,19 +203,21 @@ def chat(request: Request, db: Session=Depends(get_db)):
             }
         )
 
-# current_user: models.CustomerInfo = Depends(ouath2.get_current_user)
 """
 in js:
-const response = await fetch('/chatbot/ask', { 
+const response = await fetch('/customer/chatbot', {
     method: 'POST',
-    credentials: 'include', // <--- ADD THIS LINE so it sends your login cookie!
+    credentials: 'include',
     body: formData
 });
 """
 @router.post("/chatbot")
-def chat_res(request:Request,
-             query_text= Form(...), 
-             db:Session=Depends(get_db)):
+def chat_res(
+    request: Request,
+    query_text: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: models.CustomerInfo = Depends(get_current_customer_user),
+):
     
     services = get_service_listings_dict(db)
     response = client.chat.completions.create(
@@ -171,7 +257,7 @@ def chat_res(request:Request,
 
     chat_entry = models.ChatbotInteraction(
         id=str(uuid.uuid4()),
-        customer_id="CUST-01",
+        customer_id=current_user.customer_id,
         query_text=query_text,
         ai_response=ai_json
     )
@@ -187,7 +273,16 @@ def chat_res(request:Request,
 
 #############################
 def get_service_listings_dict(db: Session):
-    listings = db.query(models.ServiceListing).all()
+    listings = (
+        db.query(models.ServiceListing)
+        .filter(
+            or_(
+                models.ServiceListing.is_deleted.is_(False),
+                models.ServiceListing.is_deleted.is_(None),
+            )
+        )
+        .all()
+    )
     
     listings_dict = {}
     

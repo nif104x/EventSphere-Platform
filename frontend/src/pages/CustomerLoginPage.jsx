@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginCustomer } from '../api';
-import { getCustomerSession, setCustomerSession } from '../customerStorage';
+import { getCustomerAccessToken, getCustomerSession, setCustomerSession } from '../customerStorage';
 import '../customer-login.css';
 
 export default function CustomerLoginPage() {
@@ -12,7 +12,9 @@ export default function CustomerLoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (getCustomerSession()?.customer_id) {
+    const s = getCustomerSession();
+    const tok = (getCustomerAccessToken() || '').trim();
+    if (s?.customer_id && tok && tok !== 'undefined' && tok !== 'null') {
       navigate('/customer', { replace: true });
     }
   }, [navigate]);
