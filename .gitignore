@@ -1,11 +1,9 @@
 venv/
 <<<<<<< HEAD
 .venv/
-env/
 __pycache__/
 *.pyc
 *.pyo
-.env
 .vscode/
 =======
 __pycache__/
