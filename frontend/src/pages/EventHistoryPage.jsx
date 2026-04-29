@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getEventHistory, submitRating, markEventComplete } from '../api';
 import { clearCustomerSession, getCustomerId } from '../customerStorage';
 import { canMarkEventComplete, truthyApiFlag } from '../eventUi';
+import { sortCustomerEventsLatest } from '../customerSort';
 
 const formatDate = (d) => {
   if (d == null) return '';
@@ -27,7 +28,7 @@ export default function EventHistoryPage() {
     setError(null);
     getEventHistory(customerId)
       .then((res) => {
-        setEvents(res.data.events || []);
+        setEvents(sortCustomerEventsLatest(res.data.events || []));
         setLoading(false);
       })
       .catch((err) => {
@@ -136,7 +137,10 @@ export default function EventHistoryPage() {
 
       <section className="dash-panel es-history-panel">
         <div className="es-history-panel__head">
-          <h2>Past events</h2>
+          <div>
+            <h2>Past events</h2>
+            <p className="muted es-dash-table-caption">Newest event dates first.</p>
+          </div>
           <Link to="/dashboard" className="btn small">
             Back to dashboard
           </Link>

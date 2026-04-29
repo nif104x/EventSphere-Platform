@@ -51,6 +51,9 @@ export default function CustomerLayout() {
           <NavLink to="/dashboard" className={linkClass}>
             My dashboard
           </NavLink>
+          <NavLink to="/customer/orders-due" className={linkClass}>
+            Payments due
+          </NavLink>
           <NavLink to="/customer/history" className={linkClass}>
             Events & ratings
           </NavLink>

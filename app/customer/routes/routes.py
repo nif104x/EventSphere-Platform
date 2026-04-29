@@ -368,6 +368,24 @@ def create_order(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot attach an order to another customer's event",
         )
+    st_row = db.execute(
+        text(
+            """
+            SELECT LOWER(TRIM(BOTH FROM status::text)) AS st
+            FROM events WHERE id = :eid LIMIT 1
+            """
+        ),
+        {"eid": order.event_id},
+    ).first()
+    ev_st = (dict(st_row._mapping).get("st") or "").strip().lower() if st_row else ""
+    if ev_st != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "New orders can only be added while the event is awaiting organizer confirmation "
+                f"(Pending). Current status: {ev_st or 'unknown'}."
+            ),
+        )
     order_id = _next_seq(db, "event_orders", "id", "ORD")
     try:
         db.execute(
@@ -487,65 +505,43 @@ def _mark_orders_paid(db: Session, order_ids: List[str]) -> int:
     return int(rc) if rc is not None and rc >= 0 else 0
 
 
-def _maybe_confirm_events_when_fully_paid(db: Session, order_ids: List[str]) -> int:
-    """
-    When every order on an event is Paid, set event Pending → Confirmed so the customer
-    can use Mark complete (dashboard only treats Confirmed as markable).
-    """
+def _require_events_confirmed_for_payment(
+    db: Session, customer_id: str, order_ids: List[str]
+) -> None:
+    """Stripe checkout is only allowed after the organizer has confirmed (event status Confirmed)."""
     ids = [str(x).strip() for x in order_ids if str(x).strip()]
     if not ids:
-        return 0
+        raise HTTPException(status_code=400, detail="No orders to pay for")
     ph = ", ".join(f":p{i}" for i in range(len(ids)))
-    params: dict[str, str] = {f"p{i}": ids[i] for i in range(len(ids))}
-
-    event_rows = db.execute(
-        text(f"SELECT DISTINCT eo.event_id AS event_id FROM event_orders eo WHERE eo.id IN ({ph})"),
+    params: dict = {f"p{i}": ids[i] for i in range(len(ids))}
+    params["cid"] = (customer_id or "").strip()
+    rows = db.execute(
+        text(
+            f"""
+            SELECT DISTINCT ev.id AS event_id,
+                   LOWER(TRIM(BOTH FROM ev.status::text)) AS st
+            FROM event_orders eo
+            JOIN events ev ON ev.id = eo.event_id
+            WHERE eo.id IN ({ph})
+              AND ev.customer_id = :cid
+            """
+        ),
         params,
     ).fetchall()
-    event_ids = [
-        dict(r._mapping).get("event_id")
-        for r in event_rows
-        if dict(r._mapping).get("event_id")
-    ]
-    n_confirmed = 0
-    for eid in event_ids:
-        agg = db.execute(
-            text(
-                """
-                SELECT COUNT(*)::int AS n_total,
-                       COUNT(*) FILTER (
-                           WHERE COALESCE(payment_status::text, '') ILIKE 'paid'
-                       )::int AS n_paid
-                FROM event_orders
-                WHERE event_id = :eid
-                """
+    pending_events: List[str] = []
+    for r in rows:
+        m = dict(r._mapping)
+        st = (m.get("st") or "").strip().lower()
+        if st != "confirmed":
+            pending_events.append(str(m.get("event_id") or ""))
+    if pending_events:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Payment opens after the organizer confirms your booking (event status must be "
+                "Confirmed). Check your dashboard — Pending means the vendor has not accepted yet."
             ),
-            {"eid": str(eid)},
-        ).first()
-        if agg is None:
-            continue
-        m = dict(agg._mapping)
-        if int(m.get("n_total") or 0) == 0:
-            continue
-        if int(m.get("n_paid") or 0) != int(m.get("n_total") or 0):
-            continue
-        r = db.execute(
-            text(
-                """
-                UPDATE events
-                SET status = 'Confirmed'::event_status
-                WHERE id = :eid
-                  AND LOWER(TRIM(BOTH FROM status::text)) = 'pending'
-                RETURNING id
-                """
-            ),
-            {"eid": str(eid)},
-        ).first()
-        if r is not None:
-            n_confirmed += 1
-    if n_confirmed:
-        db.commit()
-    return n_confirmed
+        )
 
 
 def _coerce_stripe_metadata_value(v) -> str:
@@ -720,6 +716,7 @@ def create_stripe_checkout_session(
             detail="success_url must include the literal {CHECKOUT_SESSION_ID} for Stripe Checkout",
         )
     orders, total = _assert_customer_orders_unpaid(db, customer_id, body.order_ids)
+    _require_events_confirmed_for_payment(db, customer_id, body.order_ids)
     key = _require_stripe_secret_key()
     try:
         import stripe
@@ -828,12 +825,11 @@ def complete_stripe_checkout_session(
             raise HTTPException(status_code=400, detail="Session is missing order data")
 
         rows = _orders_owned_by_customer(db, customer_id, order_ids)
+        _require_events_confirmed_for_payment(db, customer_id, order_ids)
         if all((str(r.get("payment_status") or "").strip().lower() == "paid") for r in rows):
-            _maybe_confirm_events_when_fully_paid(db, order_ids)
             return {"ok": True, "updated": 0, "order_ids": order_ids, "already_completed": True}
         _assert_customer_orders_unpaid(db, customer_id, order_ids)
         updated = _mark_orders_paid(db, order_ids)
-        _maybe_confirm_events_when_fully_paid(db, order_ids)
         return {"ok": True, "updated": updated, "order_ids": order_ids}
     except HTTPException:
         raise
@@ -875,6 +871,21 @@ def mark_event_complete(
         raise HTTPException(
             status_code=400,
             detail=f"Only confirmed events can be marked complete (current status: {st})",
+        )
+    unpaid = db.execute(
+        text(
+            """
+        SELECT COUNT(*)::int AS c FROM event_orders
+        WHERE event_id = :eid
+          AND COALESCE(payment_status::text, '') NOT ILIKE 'paid'
+        """
+        ),
+        {"eid": eid},
+    ).first()
+    if unpaid is not None and int(dict(unpaid._mapping).get("c") or 0) > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Pay for all orders on this event before marking it complete.",
         )
     r = db.execute(
         text(
@@ -1060,7 +1071,13 @@ def get_dashboard(
                o.company_name AS company_name, e.org_id AS org_id,
                (SELECT vr.rating FROM vendor_reviews vr WHERE vr.event_id = e.id LIMIT 1) AS my_rating,
                CASE
-                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'confirmed' THEN true
+                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'confirmed'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM event_orders eo2
+                        WHERE eo2.event_id = e.id
+                          AND COALESCE(eo2.payment_status::text, '') NOT ILIKE 'paid'
+                      )
+                 THEN true
                  ELSE false
                END AS can_mark_complete,
                CASE
@@ -1119,7 +1136,13 @@ def get_event_history(
                e.org_id AS org_id, o.company_name AS company_name,
                vr.rating AS rating, vr.comment AS review_comment, vr.id AS review_id,
                CASE
-                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'confirmed' THEN true
+                 WHEN LOWER(TRIM(BOTH FROM e.status::text)) = 'confirmed'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM event_orders eo2
+                        WHERE eo2.event_id = e.id
+                          AND COALESCE(eo2.payment_status::text, '') NOT ILIKE 'paid'
+                      )
+                 THEN true
                  ELSE false
                END AS can_mark_complete,
                CASE

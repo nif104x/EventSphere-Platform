@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getChatRooms, getChatMessages, sendChatMessage, openChatRoomForEvent } from '../api';
+import { sortChatRoomsLatest } from '../customerSort';
 import '../customer-chat.css';
 
 const pollMs = 4000;
@@ -18,7 +19,7 @@ export default function CustomerChatPage() {
 
   const refreshRooms = useCallback(async () => {
     const { data } = await getChatRooms();
-    setRooms(Array.isArray(data) ? data : []);
+    setRooms(sortChatRoomsLatest(Array.isArray(data) ? data : []));
   }, []);
 
   useEffect(() => {

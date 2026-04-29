@@ -414,10 +414,90 @@
   line-height: 1.45;
 }
 
+.es-dash-callout--success {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.es-dash-callout__btn {
+  margin-left: 0.75rem;
+  vertical-align: middle;
+}
+
 .es-dash-events__hint {
   margin: 0 0 0.85rem;
   font-size: 0.875rem;
   line-height: 1.45;
+}
+
+.es-dash-table-caption {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+}
+
+.es-customer-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.25rem;
+}
+
+.es-customer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.es-customer-table th,
+.es-customer-table td {
+  border-bottom: 1px solid var(--org-border, #e2e8f0);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.es-customer-table th {
+  font-weight: 600;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.es-customer-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.es-customer-table code {
+  font-size: 0.8rem;
+}
+
+.es-dash-actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.es-dash-notes-cell {
+  max-width: 16rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.es-home-organizers-panel {
+  margin-top: 1.5rem;
+}
+
+.es-home-table-title {
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.es-book-radio-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .es-home-hero__desc a {

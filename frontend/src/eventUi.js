@@ -21,9 +21,12 @@ export function isConfirmedEventStatus(status) {
   return normalizedEventStatus(status) === 'confirmed';
 }
 
-/** Prefer API flag; fall back to status text so the button still shows if flags are wrong. */
+export function isPendingEventStatus(status) {
+  return normalizedEventStatus(status) === 'pending';
+}
+
+/** Confirmed + all orders paid (server sets can_mark_complete). */
 export function canMarkEventComplete(event) {
   if (!event) return false;
-  if (truthyApiFlag(event.can_mark_complete)) return true;
-  return isConfirmedEventStatus(event.status);
+  return truthyApiFlag(event.can_mark_complete);
 }

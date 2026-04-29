@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getDashboard, submitRating, markEventComplete } from '../api';
 import { clearCustomerSession, getCustomerId } from '../customerStorage';
 import { canMarkEventComplete, truthyApiFlag, isConfirmedEventStatus } from '../eventUi';
+import { getSortedDashboardSlices } from '../customerPayableOrders';
 
 const formatDate = (d) => {
   if (d == null) return '';
@@ -12,15 +13,24 @@ const formatDate = (d) => {
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const customerId = getCustomerId();
   const [data, setData] = useState({ events: [], orders: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [bookingPlacedBanner, setBookingPlacedBanner] = useState(false);
   const [ratingFor, setRatingFor] = useState(null);
   const [stars, setStars] = useState(5);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [completingId, setCompletingId] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.bookingPlaced) {
+      setBookingPlacedBanner(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,16 +108,36 @@ const DashboardPage = () => {
     setSaving(false);
   };
 
+  const { sortedEvents, sortedOrders, payableOrders, awaitingVendorOrders } = useMemo(
+    () => getSortedDashboardSlices(data),
+    [data],
+  );
+
+  const payableGrandTotal = useMemo(
+    () => payableOrders.reduce((sum, o) => sum + Number(o.final_total_price || 0), 0),
+    [payableOrders],
+  );
+
+  const goToPayment = useCallback(() => {
+    const lines = payableOrders.map((o) => ({
+      order_id: o.id,
+      event_id: o.event_id,
+      amount: Number(o.final_total_price || 0),
+      company_name: o.company_name,
+    }));
+    navigate('/customer/payment', { state: { lines, grandTotal: payableGrandTotal } });
+  }, [navigate, payableOrders, payableGrandTotal]);
+
   if (loading) {
     return (
       <div className="page-wrap org-page es-page es-page--dashboard org-muted">Loading dashboard…</div>
     );
   }
 
-  const eventCount = data.events.length;
-  const orderCount = data.orders.length;
-  const rateableCount = data.events.filter((e) => truthyApiFlag(e.can_rate)).length;
-  const markableCount = data.events.filter((e) => canMarkEventComplete(e)).length;
+  const eventCount = sortedEvents.length;
+  const orderCount = sortedOrders.length;
+  const rateableCount = sortedEvents.filter((e) => truthyApiFlag(e.can_rate)).length;
+  const markableCount = sortedEvents.filter((e) => canMarkEventComplete(e)).length;
 
   return (
     <div className="page-wrap org-page dashboard-page es-page es-page--dashboard">
@@ -115,9 +145,9 @@ const DashboardPage = () => {
         <div>
           <h1 className="es-page-title">My dashboard</h1>
           <p className="muted">
-            The vendor <strong>confirms</strong> your booking. <strong>You</strong> tap{' '}
-            <strong>Mark event complete</strong> when the service is finished — only after that can{' '}
-            <strong>you</strong> use <strong>Rate vendor</strong>. Full archive:{' '}
+            The vendor <strong>confirms</strong> your booking first; then <strong>you pay</strong> from{' '}
+            <strong>My orders</strong>. After payment, <strong>Mark event complete</strong> when the service is
+            finished — only then can you <strong>Rate vendor</strong>. Full archive:{' '}
             <Link to="/customer/history">Events & ratings</Link>.
           </p>
         </div>
@@ -126,6 +156,33 @@ const DashboardPage = () => {
         </Link>
       </header>
       {error && <p className="error-banner">{error}</p>}
+
+      {bookingPlacedBanner && (
+        <p className="es-dash-callout es-dash-callout--success" role="status">
+          Booking request submitted. Status stays <strong>Pending</strong> until each organizer confirms — then use{' '}
+          <strong>Pay now</strong> below.
+        </p>
+      )}
+
+      {payableOrders.length > 0 && (
+        <p className="es-dash-callout" role="status">
+          You have <strong>{payableOrders.length}</strong> unpaid order{payableOrders.length === 1 ? '' : 's'} ready for
+          payment.
+          <Link to="/customer/orders-due" className="btn small es-dash-callout__btn">
+            View list
+          </Link>
+          <button type="button" className="btn primary small es-dash-callout__btn" onClick={goToPayment}>
+            Pay now
+          </button>
+        </p>
+      )}
+
+      {awaitingVendorOrders.length > 0 && payableOrders.length === 0 && (
+        <p className="muted es-dash-callout" role="status">
+          {awaitingVendorOrders.length} order{awaitingVendorOrders.length === 1 ? '' : 's'} awaiting organizer
+          confirmation before you can pay.
+        </p>
+      )}
 
       {markableCount > 0 && (
         <p className="es-dash-callout" role="status">
@@ -157,72 +214,122 @@ const DashboardPage = () => {
       <div className="es-dash-stack">
         <section className="dash-panel es-dash-orders es-dash-panel--compact">
           <h2>My orders</h2>
-          {data.orders.length === 0 ? (
+          <p className="muted es-dash-table-caption">Newest orders first.</p>
+          {sortedOrders.length === 0 ? (
             <p className="empty-state empty-state--tight">No orders yet.</p>
           ) : (
-            <ul className="dash-list dash-list--inline">
-              {data.orders.map((order) => (
-                <li key={order.id} className="dash-row">
-                  <span>
-                    {order.company_name}: {order.title} — ${Number(order.final_total_price).toFixed(2)} (
-                    {order.payment_status})
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="es-customer-table-wrap">
+              <table className="es-customer-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Order</th>
+                    <th scope="col">Event</th>
+                    <th scope="col">Vendor</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Amount</th>
+                    <th scope="col">Payment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedOrders.map((order) => (
+                    <tr key={order.id}>
+                      <td data-label="Order">
+                        <code>{order.id}</code>
+                      </td>
+                      <td data-label="Event">
+                        <code>{order.event_id}</code>
+                      </td>
+                      <td data-label="Vendor">{order.company_name}</td>
+                      <td data-label="Service">{order.title}</td>
+                      <td data-label="Amount">${Number(order.final_total_price).toFixed(2)}</td>
+                      <td data-label="Payment">{String(order.payment_status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
         <section className="dash-panel es-dash-events">
           <h2>My events</h2>
-          {data.events.length > 0 && markableCount === 0 && (
+          <p className="muted es-dash-table-caption">Newest event dates first.</p>
+          {sortedEvents.length > 0 && markableCount === 0 && (
             <p className="muted es-dash-events__hint">
-              <strong>Mark event complete</strong> appears when status is <strong>Confirmed</strong> (after the
-              vendor accepts your booking). Pending = still waiting on the vendor.
+              <strong>Pay</strong> after status is <strong>Confirmed</strong>. <strong>Mark event complete</strong>{' '}
+              appears once the booking is confirmed <em>and</em> paid. <strong>Pending</strong> = waiting on the
+              vendor.
             </p>
           )}
-          {data.events.length === 0 ? (
+          {sortedEvents.length === 0 ? (
             <p className="empty-state empty-state--tight">No events yet.</p>
           ) : (
-            <ul className="dash-list">
-              {data.events.map((event) => (
-                <li key={event.id} className="dash-row">
-                  <div>
-                    <strong>{event.company_name}</strong> — {formatDate(event.event_date)} —{' '}
-                    <span className="status-pill">{String(event.status)}</span>
-                    {isConfirmedEventStatus(event.status) && (
-                      <span className="muted"> · You can mark this complete when the service is finished.</span>
-                    )}
-                    {event.my_rating != null && (
-                      <span className="muted"> · Your rating: ★ {Number(event.my_rating)}</span>
-                    )}
-                  </div>
-                  <div className="dash-row__actions">
-                    {canMarkEventComplete(event) && (
-                      <button
-                        type="button"
-                        className="btn primary small"
-                        disabled={completingId === event.id}
-                        onClick={() => markComplete(event.id)}
-                      >
-                        {completingId === event.id ? 'Updating…' : 'Mark event complete'}
-                      </button>
-                    )}
-                    <Link
-                      to={`/customer/chat?eventId=${encodeURIComponent(event.id)}`}
-                      className="btn small"
-                    >
-                      Message vendor
-                    </Link>
-                  </div>
-                  {truthyApiFlag(event.can_rate) && (
-                    <button type="button" className="btn primary small" onClick={() => openRate(event)}>
-                      Rate vendor
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <div className="es-customer-table-wrap">
+              <table className="es-customer-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Vendor</th>
+                    <th scope="col">Event date</th>
+                    <th scope="col">Event ID</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Notes</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td data-label="Vendor">
+                        <strong>{event.company_name}</strong>
+                      </td>
+                      <td data-label="Date">{formatDate(event.event_date)}</td>
+                      <td data-label="Event ID">
+                        <code>{event.id}</code>
+                      </td>
+                      <td data-label="Status">
+                        <span className="status-pill">{String(event.status)}</span>
+                      </td>
+                      <td data-label="Notes" className="es-dash-notes-cell">
+                        {isConfirmedEventStatus(event.status) && canMarkEventComplete(event) && (
+                          <span className="muted">Ready to mark complete when the service is finished.</span>
+                        )}
+                        {isConfirmedEventStatus(event.status) && !canMarkEventComplete(event) && (
+                          <span className="muted">Pay in My orders, then mark complete when finished.</span>
+                        )}
+                        {event.my_rating != null && (
+                          <span className="muted">Your rating: ★ {Number(event.my_rating)}</span>
+                        )}
+                      </td>
+                      <td data-label="Actions">
+                        <div className="es-dash-actions-cell">
+                          {canMarkEventComplete(event) && (
+                            <button
+                              type="button"
+                              className="btn primary small"
+                              disabled={completingId === event.id}
+                              onClick={() => markComplete(event.id)}
+                            >
+                              {completingId === event.id ? 'Updating…' : 'Mark complete'}
+                            </button>
+                          )}
+                          <Link
+                            to={`/customer/chat?eventId=${encodeURIComponent(event.id)}`}
+                            className="btn small"
+                          >
+                            Message
+                          </Link>
+                          {truthyApiFlag(event.can_rate) && (
+                            <button type="button" className="btn primary small" onClick={() => openRate(event)}>
+                              Rate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </div>

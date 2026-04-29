@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { createPaymentCheckout } from '../api';
+import { sortPaymentLinesLatest } from '../customerSort';
 
 export default function PaymentPage() {
   const location = useLocation();
@@ -8,7 +9,10 @@ export default function PaymentPage() {
   const [err, setErr] = useState(null);
 
   const payload = location.state;
-  const lines = useMemo(() => (Array.isArray(payload?.lines) ? payload.lines : []), [payload]);
+  const lines = useMemo(() => {
+    const raw = payload && Array.isArray(payload.lines) ? payload.lines : [];
+    return sortPaymentLinesLatest(raw);
+  }, [payload]);
   const orderIds = useMemo(() => lines.map((l) => l.order_id).filter(Boolean), [lines]);
   const grandTotal = typeof payload?.grandTotal === 'number' ? payload.grandTotal : 0;
 
@@ -16,9 +20,9 @@ export default function PaymentPage() {
     return (
       <div className="page-wrap org-page es-page es-page--payment">
         <h1 className="es-page-title">Payment</h1>
-        <p className="muted">Nothing to pay. Continue from Book.</p>
-        <Link to="/book" className="btn primary">
-          Book
+        <p className="muted">Nothing to pay. Open your dashboard after an organizer confirms your booking.</p>
+        <Link to="/dashboard" className="btn primary">
+          My dashboard
         </Link>
       </div>
     );
@@ -65,17 +69,29 @@ export default function PaymentPage() {
 
       <section className="dash-panel es-pay-panel">
         <h2>Summary</h2>
-        <ul className="es-pay-lines">
-          {lines.map((line) => (
-            <li key={line.order_id} className="es-pay-line">
-              <div>
-                <strong>{line.company_name || 'Vendor'}</strong>
-                <span className="muted"> · {line.order_id}</span>
-              </div>
-              <div className="es-pay-line__amt">${Number(line.amount || 0).toFixed(2)}</div>
-            </li>
-          ))}
-        </ul>
+        <p className="muted es-dash-table-caption">Newest orders first.</p>
+        <div className="es-customer-table-wrap">
+          <table className="es-customer-table">
+            <thead>
+              <tr>
+                <th scope="col">Order</th>
+                <th scope="col">Vendor</th>
+                <th scope="col">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line) => (
+                <tr key={line.order_id}>
+                  <td data-label="Order">
+                    <code>{line.order_id}</code>
+                  </td>
+                  <td data-label="Vendor">{line.company_name || 'Vendor'}</td>
+                  <td data-label="Amount">${Number(line.amount || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="es-pay-total">
           Total <strong>${grandTotal.toFixed(2)}</strong>
         </p>

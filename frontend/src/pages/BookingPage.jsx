@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { getServices, getAddons, createEvent, createOrder } from '../api';
+import { sortCustomerAddonsLatest, sortCustomerServicesLatest } from '../customerSort';
 
 function formatApiError(err) {
   const d = err?.response?.data?.detail;
@@ -153,9 +154,9 @@ const BookingPage = () => {
           company_name: o.company_name,
         });
       }
-      navigate('/customer/payment', {
+      navigate('/dashboard', {
         replace: true,
-        state: { lines, grandTotal },
+        state: { bookingPlaced: true },
       });
     } catch (err) {
       console.error(err);
@@ -204,7 +205,8 @@ const BookingPage = () => {
           <header className="es-book-intro">
             <h1 className="es-page-title">Complete your booking</h1>
             <p className="muted es-book-intro__lead">
-              One shared event date applies to all selected organizers below.
+              One shared event date applies to all selected organizers below. After you submit, each
+              vendor must confirm before you can pay from your dashboard.
             </p>
           </header>
 
@@ -224,37 +226,85 @@ const BookingPage = () => {
                 ) : (
                   <>
                     <div className="field">
-                      <label htmlFor={`svc-${o.org_id}`}>Service</label>
-                      <select
-                        id={`svc-${o.org_id}`}
-                        value={b.selectedService}
-                        onChange={(e) => onServiceChange(o.org_id, e.target.value)}
-                      >
-                        <option value="">Choose a service…</option>
-                        {b.services.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.title} — ${s.base_price}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="label">Service (A–Z)</span>
+                      {b.services.length === 0 ? (
+                        <p className="muted">No services listed for this vendor.</p>
+                      ) : (
+                        <div className="es-customer-table-wrap">
+                          <table className="es-customer-table es-book-services-table">
+                            <thead>
+                              <tr>
+                                <th scope="col">Pick</th>
+                                <th scope="col">Title</th>
+                                <th scope="col">Category</th>
+                                <th scope="col">Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td colSpan={4}>
+                                  <label className="es-book-radio-label">
+                                    <input
+                                      type="radio"
+                                      name={`svc-${o.org_id}`}
+                                      checked={!b.selectedService}
+                                      onChange={() => onServiceChange(o.org_id, '')}
+                                    />
+                                    <span className="muted">None — choose a service below</span>
+                                  </label>
+                                </td>
+                              </tr>
+                              {sortCustomerServicesLatest(b.services).map((s) => (
+                                <tr key={s.id}>
+                                  <td>
+                                    <input
+                                      type="radio"
+                                      name={`svc-${o.org_id}`}
+                                      checked={b.selectedService === s.id}
+                                      onChange={() => onServiceChange(o.org_id, s.id)}
+                                      aria-label={`Select ${s.title}`}
+                                    />
+                                  </td>
+                                  <td>{s.title}</td>
+                                  <td>{s.category}</td>
+                                  <td>${s.base_price}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                     {b.addons.length > 0 && (
                       <div className="field">
-                        <span className="label">Add-ons from this vendor</span>
-                        <ul className="addon-list">
-                          {b.addons.map((addon) => (
-                            <li key={addon.id}>
-                              <label>
-                                <input
-                                  type="checkbox"
-                                  checked={b.selectedAddons.includes(addon.id)}
-                                  onChange={() => toggleAddon(o.org_id, addon.id)}
-                                />
-                                {addon.name} (+${addon.price})
-                              </label>
-                            </li>
-                          ))}
-                        </ul>
+                        <span className="label">Add-ons (A–Z)</span>
+                        <div className="es-customer-table-wrap">
+                          <table className="es-customer-table es-book-addons-table">
+                            <thead>
+                              <tr>
+                                <th scope="col">Include</th>
+                                <th scope="col">Add-on</th>
+                                <th scope="col">Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sortCustomerAddonsLatest(b.addons).map((addon) => (
+                                <tr key={addon.id}>
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      checked={b.selectedAddons.includes(addon.id)}
+                                      onChange={() => toggleAddon(o.org_id, addon.id)}
+                                      aria-label={`Add-on ${addon.name}`}
+                                    />
+                                  </td>
+                                  <td>{addon.name}</td>
+                                  <td>+${addon.price}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                         <p className="muted">Add-ons subtotal: ${addonsTotal.toFixed(2)}</p>
                       </div>
                     )}
@@ -287,7 +337,7 @@ const BookingPage = () => {
           <div className="booking-footer es-book-aside__summary">
             <p className="grand-total">Grand total: ${grandTotal.toFixed(2)}</p>
             <button type="button" className="btn primary" disabled={!ready || submitting} onClick={handleBook}>
-              {submitting ? 'Creating booking…' : 'Confirm order & pay'}
+              {submitting ? 'Creating booking…' : 'Submit booking request'}
             </button>
           </div>
         </aside>

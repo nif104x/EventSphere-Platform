@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import OrganizerCard from '../components/OrganizerCard';
 import { getOrganizers } from '../api';
+import { sortOrganizersLatest } from '../customerSort';
 
 const HomePage = () => {
   const [organizers, setOrganizers] = useState([]);
@@ -12,7 +12,7 @@ const HomePage = () => {
   useEffect(() => {
     getOrganizers()
       .then((res) => {
-        setOrganizers(res.data);
+        setOrganizers(sortOrganizersLatest(res.data));
         setLoading(false);
       })
       .catch((err) => {
@@ -53,8 +53,8 @@ const HomePage = () => {
           <h1 className="es-page-title">Choose your organizers</h1>
           <p className="muted es-home-hero__desc">
             Select one or more vendors, then continue to pick services, add-ons, and your event date. After the vendor
-            confirms, open <Link to="/dashboard">My dashboard</Link> to <strong>mark the event complete</strong>, then
-            leave a rating.
+            confirms, open <Link to="/dashboard">My dashboard</Link> to <strong>pay</strong>, then{' '}
+            <strong>mark the event complete</strong> and leave a rating.
           </p>
         </header>
         <aside className="es-home-aside" aria-label="Selection summary">
@@ -72,16 +72,55 @@ const HomePage = () => {
           </div>
         </aside>
       </div>
-      <div className="card-grid es-home-grid">
-        {organizers.map((org) => (
-          <OrganizerCard
-            key={org.org_id}
-            organizer={org}
-            selected={selectedIds.has(org.org_id)}
-            onToggleSelect={() => toggleOrg(org.org_id)}
-          />
-        ))}
-      </div>
+
+      <section className="dash-panel es-home-organizers-panel" aria-label="Organizer directory">
+        <h2 className="es-page-title es-home-table-title">Organizers</h2>
+        <p className="muted es-dash-table-caption">
+          Sorted by review activity (most reviews first), then average rating.
+        </p>
+        {organizers.length === 0 ? (
+          <p className="empty-state empty-state--tight">No organizers available.</p>
+        ) : (
+          <div className="es-customer-table-wrap">
+            <table className="es-customer-table">
+              <thead>
+                <tr>
+                  <th scope="col">Select</th>
+                  <th scope="col">Company</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">Avg rating</th>
+                  <th scope="col">Reviews</th>
+                  <th scope="col">Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {organizers.map((org) => (
+                  <tr key={org.org_id}>
+                    <td data-label="Select">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(org.org_id)}
+                        onChange={() => toggleOrg(org.org_id)}
+                        aria-label={`Select ${org.company_name}`}
+                      />
+                    </td>
+                    <td data-label="Company">
+                      <strong>{org.company_name}</strong>
+                      <div className="muted">
+                        <code>{org.org_id}</code>
+                      </div>
+                    </td>
+                    <td data-label="Category">{org.primary_category || '—'}</td>
+                    <td data-label="Avg rating">{Number(org.avg_rating || 0).toFixed(2)}</td>
+                    <td data-label="Reviews">{org.review_count ?? 0}</td>
+                    <td data-label="Email">{org.email || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 };
