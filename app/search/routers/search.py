@@ -15,14 +15,36 @@ def _not_deleted():
     return or_(ServiceListing.is_deleted.is_(False), ServiceListing.is_deleted.is_(None))
 
 
+def _clean_str(value: str | None) -> str | None:
+    if value is None:
+        return None
+    v = value.strip()
+    return v or None
+
+
+def _parse_optional_float(value: str | None) -> float | None:
+    v = _clean_str(value)
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except ValueError:
+        return None
+
+
 @router.get("/search")
 def search(
     query: str | None = Query(default=None),
     category: str | None = Query(default=None),
-    min_price: float | None = Query(default=None),
-    max_price: float | None = Query(default=None),
+    min_price: str | None = Query(default=None),
+    max_price: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    query = _clean_str(query)
+    category = _clean_str(category)
+    min_price_f = _parse_optional_float(min_price)
+    max_price_f = _parse_optional_float(max_price)
+
     q = (
         db.query(ServiceListing, OrganizerInfo)
         .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
@@ -40,13 +62,13 @@ def search(
         )
 
     if category:
-        q = q.filter(ServiceListing.category == category)
+        q = q.filter(ServiceListing.category.ilike(category))
 
-    if min_price is not None:
-        q = q.filter(ServiceListing.base_price >= min_price)
+    if min_price_f is not None:
+        q = q.filter(ServiceListing.base_price >= min_price_f)
 
-    if max_price is not None:
-        q = q.filter(ServiceListing.base_price <= max_price)
+    if max_price_f is not None:
+        q = q.filter(ServiceListing.base_price <= max_price_f)
 
     rows = q.order_by(ServiceListing.base_price.asc()).all()
 
@@ -92,10 +114,15 @@ def search_ui(
     request: Request,
     query: str | None = Query(default=None),
     category: str | None = Query(default=None),
-    min_price: float | None = Query(default=None),
-    max_price: float | None = Query(default=None),
+    min_price: str | None = Query(default=None),
+    max_price: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    query = _clean_str(query)
+    category = _clean_str(category)
+    min_price_f = _parse_optional_float(min_price)
+    max_price_f = _parse_optional_float(max_price)
+
     q = (
         db.query(ServiceListing, OrganizerInfo)
         .outerjoin(OrganizerInfo, ServiceListing.org_id == OrganizerInfo.org_id)
@@ -113,13 +140,13 @@ def search_ui(
         )
 
     if category:
-        q = q.filter(ServiceListing.category == category)
+        q = q.filter(ServiceListing.category.ilike(category))
 
-    if min_price is not None:
-        q = q.filter(ServiceListing.base_price >= min_price)
+    if min_price_f is not None:
+        q = q.filter(ServiceListing.base_price >= min_price_f)
 
-    if max_price is not None:
-        q = q.filter(ServiceListing.base_price <= max_price)
+    if max_price_f is not None:
+        q = q.filter(ServiceListing.base_price <= max_price_f)
 
     rows = q.order_by(ServiceListing.base_price.asc()).all()
 
@@ -159,8 +186,8 @@ def search_ui(
             "filters": {
                 "query": query or "",
                 "category": category or "",
-                "min_price": "" if min_price is None else str(min_price),
-                "max_price": "" if max_price is None else str(max_price),
+                "min_price": "" if min_price_f is None else str(min_price_f),
+                "max_price": "" if max_price_f is None else str(max_price_f),
             },
             "nav_active": "search",
             "role_badge": "Search",

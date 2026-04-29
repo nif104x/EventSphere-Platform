@@ -205,6 +205,7 @@ def admin_ui_send_customer_reminders(
             "nav_active": "admin",
             "role_badge": "Admin",
             "task_result": result,
+            "initial_tab": "orders",
         },
     )
 
