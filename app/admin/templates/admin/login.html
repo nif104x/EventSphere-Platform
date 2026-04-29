@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Login | EventSphere</title>
+    <link href="/assets/css/dashboard.css" rel="stylesheet" />
+    <style>
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .card {
+        width: 100%;
+        max-width: 440px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        padding: 2.25rem;
+      }
+      .title {
+        font-size: 1.65rem;
+        font-weight: 800;
+        margin: 0 0 0.25rem 0;
+      }
+      .sub {
+        margin: 0 0 1.5rem 0;
+        color: #475569;
+      }
+      .badge {
+        display: inline-block;
+        background: #0f172a;
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.8rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        margin-bottom: 0.75rem;
+      }
+      label {
+        display: block;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin: 0 0 0.4rem 0;
+        color: #334155;
+      }
+      input {
+        width: 100%;
+        padding: 0.85rem 1rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        font-size: 1rem;
+        outline: none;
+      }
+      input:focus {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+      }
+      .row {
+        margin-bottom: 1.15rem;
+      }
+      .btn {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 0.85rem 1rem;
+        font-weight: 800;
+        background: #0f172a;
+        color: #fff;
+        cursor: pointer;
+      }
+      .btn:hover {
+        background: #111827;
+      }
+      .hint {
+        margin-top: 1rem;
+        font-size: 0.9rem;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="badge">Admin Portal</div>
+      <h1 class="title">EventSphere</h1>
+      <p class="sub">Sign in to access admin tools</p>
+
+      <form method="post" action="/admin/login">
+        <input type="hidden" name="next" value="{{ next or '/admin/ui' }}" />
+
+        <div class="row">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            required
+            autocomplete="username"
+            placeholder="admin username"
+          />
+        </div>
+
+        <div class="row">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            autocomplete="current-password"
+            placeholder="••••••••"
+          />
+        </div>
+
+        <button class="btn" type="submit">Sign In</button>
+      </form>
+
+      <div class="hint">If you don’t have an admin account in the database, create one first.</div>
+    </main>
+  </body>
+</html>
+

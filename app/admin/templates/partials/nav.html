@@ -5,4 +5,8 @@
     <li><a href="/admin/ui" class="{{ 'active' if nav_active == 'admin' else '' }}">Admin</a></li>
     <li><a href="/ui/search" class="{{ 'active' if nav_active == 'search' else '' }}">Search</a></li>
   </ul>
+  <form method="post" action="/admin/logout" style="margin-top:1rem">
+    <input type="hidden" name="next" value="/admin/login" />
+    <button class="btn-sm danger" type="submit" style="width:100%">Logout</button>
+  </form>
 </nav>

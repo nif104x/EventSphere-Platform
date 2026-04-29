@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin | EventSphere</title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <link href="/assets/css/dashboard.css" rel="stylesheet" />
   </head>
   <body>
@@ -181,6 +184,23 @@
     </main>
 
     <script>
+      // If this page was restored from the back/forward cache after logout,
+      // force a reload so the server can redirect to /admin/login.
+      window.addEventListener("pageshow", function (event) {
+        if (event && event.persisted) {
+          window.location.reload();
+          return;
+        }
+        try {
+          const nav = performance.getEntriesByType("navigation");
+          if (nav && nav.length && nav[0].type === "back_forward") {
+            window.location.reload();
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+
       const tabListings = document.getElementById("tabListings");
       const tabOrders = document.getElementById("tabOrders");
       const tabUsers = document.getElementById("tabUsers");
