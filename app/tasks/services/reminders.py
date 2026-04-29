@@ -26,11 +26,40 @@ def send_customer_due_reminders(db: Session, manual: bool = False):
     sent = []
     skipped = []
     failed = []
+    stats = {
+        "today": str(today),
+        "target_event_date": None if manual else str(target),
+        "events_matched": len(events),
+        "events_missing_customer": 0,
+        "events_with_no_orders": 0,
+        "orders_seen": 0,
+        "orders_emailed": 0,
+    }
 
     for ev in events:
         if not ev.customer:
+            stats["events_missing_customer"] += 1
+            skipped.append(
+                {
+                    "event_id": ev.id,
+                    "order_id": None,
+                    "reason": "missing customer profile",
+                }
+            )
             continue
+        if not (ev.orders or []):
+            stats["events_with_no_orders"] += 1
+            skipped.append(
+                {
+                    "event_id": ev.id,
+                    "order_id": None,
+                    "reason": "no orders for event",
+                }
+            )
+            continue
+
         for o in ev.orders or []:
+            stats["orders_seen"] += 1
             milestones = [m for m in (o.milestones or []) if m.status != "Paid"]
 
             if not milestones:
@@ -65,6 +94,7 @@ def send_customer_due_reminders(db: Session, manual: bool = False):
 
             try:
                 send_email_resend(to_email=cust.email, subject=subject, text=msg)
+                stats["orders_emailed"] += 1
                 sent.append(
                     {
                         "event_id": ev.id,
@@ -86,6 +116,7 @@ def send_customer_due_reminders(db: Session, manual: bool = False):
 
     return {
         "mode": "manual" if manual else "auto",
+        "stats": stats,
         "sent": sent,
         "skipped": skipped,
         "failed": failed,

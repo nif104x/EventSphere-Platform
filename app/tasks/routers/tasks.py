@@ -13,10 +13,11 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.post("/send-customer-reminders")
 def send_customer_reminders(
     x_task_token: str | None = Header(default=None),
+    manual: bool = False,
     db: Session = Depends(get_db),
 ):
     token = os.getenv("TASK_TOKEN", "")
     if token and x_task_token != token:
         raise HTTPException(status_code=401, detail="Invalid task token")
-    return send_customer_due_reminders(db)
+    return send_customer_due_reminders(db, manual=manual)
 
