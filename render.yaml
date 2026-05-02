@@ -2,6 +2,8 @@
 # or copy startCommand / PYTHON_VERSION into an existing Web Service manually.
 #
 # Root directory in Render UI should be this folder (EventSphere-Platform), or adjust paths.
+#
+# Start command must bind 0.0.0.0 and $PORT (not 127.0.0.1:8000) or Render cannot route traffic.
 
 services:
   - type: web

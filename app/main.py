@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -92,6 +93,17 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.head("/")
+def root_head():
+    """Some load balancers / Render probes use HEAD; GET-only would return 405."""
+    return Response(status_code=200)
+
+
+@app.head("/health")
+def health_head():
+    return Response(status_code=200)
 
 
 if __name__ == "__main__":
