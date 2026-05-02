@@ -7,14 +7,18 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+import os
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-load_dotenv(_PROJECT_ROOT / ".env")
-load_dotenv(Path(__file__).resolve().parent / ".env")
+# On Render, secrets come from the service environment only (RENDER=true).
+if str(os.getenv("RENDER", "")).lower() not in ("1", "true", "yes"):
+    load_dotenv(_PROJECT_ROOT / ".env")
+    load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from app import models as core_models
 from app.paths import APP_DIR
