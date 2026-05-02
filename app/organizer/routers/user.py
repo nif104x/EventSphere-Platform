@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, status, Response, Depends, APIRouter
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, text
 
+from app.paths import APP_DIR
 from app.organizer.database import get_db
 from app.organizer import models, schemas, utils, ouath2, database
 from app.organizer.routers import auth
@@ -14,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse, HTMLResponse
 
 
-templates = Jinja2Templates(directory="app/organizer/templates")
+templates = Jinja2Templates(directory=str(APP_DIR / "organizer" / "templates"))
 
 
 router = APIRouter(

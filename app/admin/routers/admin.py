@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
 from app.admin.schemas import AdminSetUserStatusIn
+from app.paths import APP_DIR
 from app.database import get_db
 from app.models import (
     Event,
@@ -17,7 +18,7 @@ from app.models import (
 from app.tasks.services.reminders import send_customer_due_reminders
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-templates = Jinja2Templates(directory="app/admin/templates")
+templates = Jinja2Templates(directory=str(APP_DIR / "admin" / "templates"))
 
 def _admin_ui_data(db: Session):
     listings = (

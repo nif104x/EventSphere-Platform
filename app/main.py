@@ -17,6 +17,7 @@ load_dotenv(_PROJECT_ROOT / ".env")
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from app import models as core_models
+from app.paths import APP_DIR
 from app.admin.routers import admin
 from app.customer.database import Base as customer_base, engine as customer_engine
 from app.customer.routes import router as customer_router
@@ -59,8 +60,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory="app/static_shared"), name="assets")
-app.mount("/static", StaticFiles(directory="app/organizer/static"), name="static")
+app.mount("/assets", StaticFiles(directory=str(APP_DIR / "static_shared")), name="assets")
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "organizer" / "static")), name="static")
 
 app.include_router(admin.router)
 app.include_router(customer_router)

@@ -4,11 +4,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.paths import APP_DIR
 from app.database import get_db
 from app.models import ListingImage, OrganizerInfo, ServiceAddon, ServiceListing
 
 router = APIRouter(tags=["search"])
-templates = Jinja2Templates(directory="app/search/templates")
+templates = Jinja2Templates(directory=str(APP_DIR / "search" / "templates"))
 
 
 def _not_deleted():
