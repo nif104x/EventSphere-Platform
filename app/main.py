@@ -7,16 +7,22 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+import os
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-load_dotenv(_PROJECT_ROOT / ".env")
-load_dotenv(Path(__file__).resolve().parent / ".env")
+# On Render, secrets come from the service environment only (RENDER=true).
+if str(os.getenv("RENDER", "")).lower() not in ("1", "true", "yes"):
+    load_dotenv(_PROJECT_ROOT / ".env")
+    load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from app import models as core_models
+from app.paths import APP_DIR
 from app.admin.routers import admin
 from app.customer.database import Base as customer_base, engine as customer_engine
 from app.customer.routes import router as customer_router
@@ -36,6 +42,24 @@ customer_base.metadata.create_all(bind=customer_engine)
 
 app = FastAPI(title="EventSphere API")
 
+# Browser origins allowed to call this API (JSON + credentialed requests).
+# Netlify: production + branch deploys (*.netlify.app). Add custom domains via CORS_ORIGINS on Render.
+_NETLIFY_ORIGIN_REGEX = r"https://[^/]+\.netlify\.app$"
+
+
+def _cors_allow_origins() -> list[str]:
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://eventsphere-platform.onrender.com",
+    ]
+    extra = os.getenv("CORS_ORIGINS", "").strip()
+    for part in extra.split(","):
+        p = part.strip()
+        if p and p not in origins:
+            origins.append(p)
+    return origins
+
 
 @app.on_event("startup")
 def _ensure_schema():
@@ -50,17 +74,15 @@ def _ensure_schema():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_cors_allow_origins(),
+    allow_origin_regex=_NETLIFY_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory="app/static_shared"), name="assets")
-app.mount("/static", StaticFiles(directory="app/organizer/static"), name="static")
+app.mount("/assets", StaticFiles(directory=str(APP_DIR / "static_shared")), name="assets")
+app.mount("/static", StaticFiles(directory=str(APP_DIR / "organizer" / "static")), name="static")
 
 app.include_router(admin.router)
 app.include_router(customer_router)
@@ -87,6 +109,17 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.head("/")
+def root_head():
+    """Some load balancers / Render probes use HEAD; GET-only would return 405."""
+    return Response(status_code=200)
+
+
+@app.head("/health")
+def health_head():
+    return Response(status_code=200)
 
 
 if __name__ == "__main__":

@@ -9,11 +9,12 @@ from fastapi.responses import Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.paths import APP_DIR
 from app.database import get_db
 from app.reports.services.orders import get_orders_report_rows
 
 router = APIRouter(prefix="/reports", tags=["reports"])
-templates = Jinja2Templates(directory="app/reports/templates")
+templates = Jinja2Templates(directory=str(APP_DIR / "reports" / "templates"))
 
 
 @router.get("/orders.csv")

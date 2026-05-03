@@ -1,0 +1,7 @@
+# Deploy this folder as the Netlify site root (or set "Base directory" to `frontend` in the repo).
+# SPA: client-side routes must fall back to index.html.
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

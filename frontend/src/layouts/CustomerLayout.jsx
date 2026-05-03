@@ -1,6 +1,7 @@
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import { getCustomerSession, clearCustomerSession } from '../customerStorage';
 import { logoutCustomer } from '../api';
+import { getBackendOrigin } from '../backendOrigin';
 
 const linkClass = ({ isActive }) =>
   `org-sidebar__link${isActive ? ' org-sidebar__link--active' : ''}`;
@@ -18,8 +19,9 @@ const CUSTOMER_CHATBOT_HREF = (() => {
       /* fall through */
     }
   }
-  // Same-origin + reverse-proxy `/customer` → FastAPI; shares `access_token` from `/api/customer/login`.
-  return '/customer/chatbot';
+  // Dev: Vite proxies `/customer/chatbot` → FastAPI. Prod (Netlify): absolute API origin.
+  if (import.meta.env.DEV) return '/customer/chatbot';
+  return `${getBackendOrigin()}/customer/chatbot`;
 })();
 
 export default function CustomerLayout() {

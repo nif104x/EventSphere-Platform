@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { clearCustomerSession, getCustomerAccessToken } from './customerStorage';
+import { DEFAULT_API_ORIGIN } from './apiOrigin';
 
-// Dev: Vite proxies `/api` → FastAPI. Prod default: call API on :8000 unless VITE_API_BASE is set.
+// Dev: Vite proxies `/api` → FastAPI. Prod: Render API unless VITE_API_BASE is set (e.g. in Netlify env).
 const raw =
   import.meta.env.VITE_API_BASE ||
-  (import.meta.env.DEV ? '/api' : 'http://localhost:8000/api');
+  (import.meta.env.DEV ? '/api' : `${DEFAULT_API_ORIGIN}/api`);
 const API_BASE = raw.replace(/\/$/, '');
 
 const api = axios.create({

@@ -17,7 +17,10 @@ def password_matches_stored(plain_password: str, stored_password: str) -> bool:
     if plain_password is None or stored_password is None:
         return False
     plain = (plain_password or "").strip()
-    stored = (stored_password or "").strip()
+    if isinstance(stored_password, (bytes, memoryview)):
+        stored = bytes(stored_password).decode("utf-8", errors="replace").strip()
+    else:
+        stored = str(stored_password or "").strip()
     if not plain or not stored:
         return False
     if stored.startswith("$"):
