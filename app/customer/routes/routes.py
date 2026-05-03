@@ -12,13 +12,13 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 from typing import List, Optional, Tuple
 
 from app.customer.database import get_db
-from app.organizer import ouath2
+from app.organizer import models as org_models, ouath2, utils
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -197,38 +197,55 @@ class CustomerLoginIn(BaseModel):
     password: str
 
 
+def _role_is_customer(role) -> bool:
+    """Match RoleEnum or string/DB quirks (same user_main row as organizer login)."""
+    if role == org_models.RoleEnum.Customer:
+        return True
+    if role is None:
+        return False
+    tail = str(role).strip().strip('"').split(".")[-1]
+    return tail.lower() == "customer"
+
+
 @router.post("/customer/login")
 def customer_login(body: CustomerLoginIn, db: Session = Depends(get_db)):
-    """Same credential rules as organizer Jinja login: user_main row + plaintext password + Customer role."""
-    row = db.execute(
-        text(
-            """
-        SELECT u.id AS id, u.password AS password, u.role::text AS role, c.full_name AS full_name
-        FROM user_main u
-        INNER JOIN customer_info c ON c.customer_id = u.id
-        WHERE u.username = :username
-        LIMIT 1
-        """
-        ),
-        {"username": body.username.strip()},
-    ).first()
-    if row is None:
+    """Same rules as organizer Jinja login: ORM user_main + customer_info, Argon2 or legacy plaintext."""
+    uname = (body.username or "").strip()
+    pwd = (body.password or "").strip()
+    if not uname or not pwd:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Username and password are required",
+        )
+
+    user = (
+        db.query(org_models.UserMain)
+        .filter(func.lower(org_models.UserMain.username) == func.lower(uname))
+        .first()
+    )
+    if not user:
         raise HTTPException(status_code=404, detail="Invalid credential")
-    m = dict(row._mapping)
-    if m.get("password") != body.password:
+    if not utils.password_matches_stored(pwd, user.password):
         raise HTTPException(status_code=404, detail="Invalid credential")
-    role = (m.get("role") or "").strip()
-    if role != "Customer" and not role.endswith(".Customer"):
+    if not _role_is_customer(user.role):
         raise HTTPException(status_code=403, detail="Not a customer account")
 
+    cust = (
+        db.query(org_models.CustomerInfo)
+        .filter(org_models.CustomerInfo.customer_id == user.id)
+        .first()
+    )
+    if not cust:
+        raise HTTPException(status_code=404, detail="Invalid credential")
+
     access_token = ouath2.create_access_token(
-        data={"user_id": m["id"]},
+        data={"user_id": user.id},
         expires_delta=timedelta(minutes=ouath2.CUSTOMER_ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     payload = {
-        "customer_id": m["id"],
-        "full_name": m["full_name"],
-        "username": body.username.strip(),
+        "customer_id": user.id,
+        "full_name": cust.full_name,
+        "username": user.username,
         "access_token": access_token,
         "token_type": "bearer",
     }

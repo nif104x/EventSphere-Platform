@@ -18,3 +18,4 @@ services:
         value: "3.12.8"
       # Link a Render Postgres instance in the dashboard; Render injects DATABASE_URL.
       # Or set DATABASE_URL manually to the External Connection String from the DB page.
+      # Optional: CORS_ORIGINS=https://your-custom-domain.com (comma-separated). Netlify *.netlify.app is allowed by default in code.

@@ -42,6 +42,24 @@ customer_base.metadata.create_all(bind=customer_engine)
 
 app = FastAPI(title="EventSphere API")
 
+# Browser origins allowed to call this API (JSON + credentialed requests).
+# Netlify: production + branch deploys (*.netlify.app). Add custom domains via CORS_ORIGINS on Render.
+_NETLIFY_ORIGIN_REGEX = r"https://[^/]+\.netlify\.app$"
+
+
+def _cors_allow_origins() -> list[str]:
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://eventsphere-platform.onrender.com",
+    ]
+    extra = os.getenv("CORS_ORIGINS", "").strip()
+    for part in extra.split(","):
+        p = part.strip()
+        if p and p not in origins:
+            origins.append(p)
+    return origins
+
 
 @app.on_event("startup")
 def _ensure_schema():
@@ -56,10 +74,8 @@ def _ensure_schema():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_cors_allow_origins(),
+    allow_origin_regex=_NETLIFY_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -33,8 +33,12 @@ export default function CustomerLoginPage() {
       });
       navigate('/customer', { replace: true });
     } catch (err) {
-      const msg = err.response?.data?.detail;
-      setError(typeof msg === 'string' ? msg : 'Invalid credentials.');
+      const detail = err.response?.data?.detail;
+      let msg = 'Invalid credentials.';
+      if (typeof detail === 'string') msg = detail;
+      else if (Array.isArray(detail) && detail[0]?.msg) msg = detail.map((d) => d.msg).join(' ');
+      else if (detail && typeof detail === 'object' && detail.msg) msg = String(detail.msg);
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
